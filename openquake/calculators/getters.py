@@ -579,7 +579,7 @@ class RuptureGetter(object):
         eid_rlz = []
         for rup in self.proxies:
             ebr = EBRupture(mock.Mock(rup_id=rup['serial']), rup['srcidx'],
-                            self.grp_id, rup['n_occ'], self.samples)
+                            self.grp_id, rup['n_occ'], self.samples,rup["proba_occ"])
             for rlz_id, eids in ebr.get_eids_by_rlz(self.rlzs_by_gsim).items():
                 for eid in eids:
                     eid_rlz.append((eid + rup['e0'], rup['id'], rlz_id))

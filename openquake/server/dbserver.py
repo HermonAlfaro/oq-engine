@@ -47,6 +47,7 @@ ZMQ = os.environ.get(
 DBSERVER_PORT = int(os.environ.get('OQ_DBSERVER_PORT') or config.dbserver.port)
 
 
+
 class DbServer(object):
     """
     A server collecting the received commands into a queue
@@ -216,3 +217,8 @@ def run_server(dbhostport=None, loglevel='WARN', foreground=False):
         # will loose control of the process
         detach_process()
     DbServer(db, addr).start()  # expects to be killed with CTRL-C
+
+
+if __name__=="__main__":
+
+    print(config.dbserver.multi_user)

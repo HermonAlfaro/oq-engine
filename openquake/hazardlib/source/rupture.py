@@ -21,8 +21,12 @@ Module :mod:`openquake.hazardlib.source.rupture` defines classes
 :class:`ParametricProbabilisticRupture`
 """
 import abc
+import logging
+
 import numpy
 import math
+from scipy.special import loggamma
+
 import itertools
 import toml
 from openquake.baselib import general
@@ -237,6 +241,12 @@ class BaseRupture(metaclass=abc.ABCMeta):
         """
         raise NotImplementedError
 
+    def proba_number_of_occurrences(self,k=1):
+        """
+        Porba to have sampled a value equal to k
+        """
+        raise NotImplementedError
+
 
 class NonParametricProbabilisticRupture(BaseRupture):
     """
@@ -276,6 +286,10 @@ class NonParametricProbabilisticRupture(BaseRupture):
             [prob for (prob, occ) in pmf.data], numpy.float32)
         self.occurrence_rate = numpy.nan
 
+        print(f"Initializing NonParametricProbabilisticRupture:")
+        print(f"self.rup_id: {self.rup_id}, len({self}.probs_occur): {len(self.probs_occur)}")
+
+
     def sample_number_of_occurrences(self, n=1):
         """
         See :meth:`superclass method
@@ -285,9 +299,46 @@ class NonParametricProbabilisticRupture(BaseRupture):
         Uses 'Inverse Transform Sampling' method.
         """
         # compute cdf from pmf
+        print(f"calling {self}.sample_number_of_occurrences w/params:")
+        print(f"n = {n}")
         cdf = numpy.cumsum(self.probs_occur)
+        print(f"cdf: {cdf}")
+
+        print(f"calling numpy.digitize w/params:")
+        print(f"numpy.random.random(n): {numpy.random.random(n)}")
+        print(f"cdf: {cdf}")
         n_occ = numpy.digitize(numpy.random.random(n), cdf)
+        print(f"len(n_occ): {len(n_occ)}")
+
         return n_occ
+
+    def proba_number_of_occurrences(self,k=1):
+
+        is_iter = False
+
+        try:
+            iter(k)
+            is_iter = True
+        except:
+            pass
+
+        if k is is_iter:
+            probas =[]
+
+            for i in range(k):
+                if k[i] < 0  or k[i] >= len(self.probs_occur):
+                    probas.append(0.0)
+                else:
+                    probas.append(self.probs_occur[k[i]])
+
+            return numpy.array(probas,numpy.float32)
+
+        else:
+            if k < 0 or k >=  len(self.probs_occur):
+                return 0.0
+
+            else:
+                return self.probs_occur[k]
 
 
 class ParametricProbabilisticRupture(BaseRupture):
@@ -348,8 +399,22 @@ class ParametricProbabilisticRupture(BaseRupture):
         `openquake.hazardlib.tom.PoissonTOM.sample_number_of_occurrences`
         of an assigned temporal occurrence model.
         """
+        print(f"calling {self}.sample_number_of_occurrences w/params:")
+        print(f"n: {n}")
         r = self.occurrence_rate * self.temporal_occurrence_model.time_span
-        return numpy.random.poisson(r, n)
+        print(f"calling numpy.random.poisson(r, n) w/params:")
+        print(f"r = self.occurrence_rate * self.temporal_occurrence_model.time_span = {self.occurrence_rate} * {self.temporal_occurrence_model.time_span} = {r}")
+        print(f"n = {n}")
+        res = numpy.random.poisson(r, n)
+        print(f"len(res): {len(res)}")
+
+        return res
+
+    def proba_number_of_occurrences(self,k=1):
+
+        r = self.occurrence_rate * self.temporal_occurrence_model.time_span
+        return numpy.exp(k * numpy.log(r) - r - loggamma(k+1))
+
 
     def get_probability_no_exceedance(self, poes):
         """
@@ -620,12 +685,13 @@ class ExportedRupture(object):
     :param events_by_ses: dictionary ses_idx -> event records
     :param indices: site indices
     """
-    def __init__(self, rupid, n_occ, events_by_ses, indices=None):
+    def __init__(self, rupid, n_occ, events_by_ses, indices=None, proba_occ=None):
         self.rupid = rupid
         self.n_occ = n_occ
         self.events_by_ses = events_by_ses
         self.indices = indices
 
+        self.proba_occ = proba_occ # NEW : proba to have sample n_occ
 
 def get_eids(rup_array, samples_by_grp, num_rlzs_by_grp):
     """
@@ -650,7 +716,7 @@ class EBRupture(object):
     object, containing an array of site indices affected by the rupture,
     as well as the IDs of the corresponding seismic events.
     """
-    def __init__(self, rupture, srcidx, grp_id, n_occ, samples=1, id=None):
+    def __init__(self, rupture, srcidx, grp_id, n_occ, samples=1, id=None, proba_occ=None):
         # NB: when reading an exported ruptures.xml the rup_id will be 0
         # for the first rupture; it used to be the seed instead
         assert rupture.rup_id >= 0  # sanity check
@@ -660,6 +726,8 @@ class EBRupture(object):
         self.n_occ = n_occ
         self.samples = samples
         self.id = id  # id of the rupture on the DataStore, to be overridden
+
+        self.proba_occ = proba_occ # NEW : proba to have sampled the n_occ
 
     @property
     def rup_id(self):
@@ -706,7 +774,7 @@ class EBRupture(object):
         attributes set, suitable for export in XML format.
         """
         rupture = self.rupture
-        new = ExportedRupture(self.id, self.n_occ, events_by_ses)
+        new = ExportedRupture(self.id, self.n_occ, events_by_ses,proba_occ=self.proba_occ)
         if isinstance(rupture.surface, geo.ComplexFaultSurface):
             new.typology = 'complexFaultsurface'
         elif isinstance(rupture.surface, geo.SimpleFaultSurface):
@@ -782,7 +850,7 @@ class RuptureProxy(object):
         # not implemented: rupture_slip_direction
         rupture = _get_rupture(self.rec, self.geom, trt)
         ebr = EBRupture(rupture, self.rec['srcidx'], self.rec['grp_id'],
-                        self.rec['n_occ'], samples)
+                        self.rec['n_occ'], samples,proba_occ=self.rec["proba_occ"])
         ebr.id = self.rec['id']
         ebr.e0 = self.rec['e0']
         return ebr

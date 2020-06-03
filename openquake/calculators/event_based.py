@@ -121,6 +121,8 @@ class EventBasedCalculator(base.HazardCalculator):
                     src.src_filter = srcfilter
             srcfilter = nofilter  # otherwise it would be ultra-slow
         for sg in self.csm.src_groups:
+
+            print(f"sg: {sg}")
             if not sg.sources:
                 continue
             logging.info('Sending %s', sg)
@@ -128,9 +130,12 @@ class EventBasedCalculator(base.HazardCalculator):
             par['gsims'] = gsims_by_trt[sg.trt]
             for src_group in sg.split(maxweight):
                 allargs.append((src_group, srcfilter, par))
-        smap = parallel.Starmap(
-            sample_ruptures, allargs, h5=self.datastore.hdf5)
+
+        # parallel sample ruptures
+        smap = parallel.Starmap(sample_ruptures, allargs, h5=self.datastore.hdf5)
+
         mon = self.monitor('saving ruptures')
+
         for dic in smap:
             if dic['calc_times']:
                 calc_times += dic['calc_times']
@@ -151,6 +156,9 @@ class EventBasedCalculator(base.HazardCalculator):
             self.store_source_info(calc_times)
         logging.info('Reordering the ruptures and storing the events')
         sorted_ruptures = self.datastore.getitem('ruptures')[()]
+
+        print(f"sorted_ruptures: {sorted_ruptures}")
+
         # order the ruptures by rup_id
         sorted_ruptures.sort(order='serial')
         nr = len(sorted_ruptures)
@@ -165,6 +173,10 @@ class EventBasedCalculator(base.HazardCalculator):
         :param acc: accumulator dictionary
         :param result: an AccumDict with events, ruptures, gmfs and hcurves
         """
+
+        #print(type(result))
+        #print(result.keys())
+
         sav_mon = self.monitor('saving gmfs')
         agg_mon = self.monitor('aggregating hcurves')
         with sav_mon:
@@ -212,6 +224,8 @@ class EventBasedCalculator(base.HazardCalculator):
         if len(events) < 1E5:
             it = map(RuptureGetter.get_eid_rlz, rgetters)
         else:
+
+            # parallel composite array with the associations eid->rlz
             it = parallel.Starmap(RuptureGetter.get_eid_rlz,
                                   ((rgetter,) for rgetter in rgetters),
                                   progress=logging.debug,
@@ -230,6 +244,7 @@ class EventBasedCalculator(base.HazardCalculator):
         events['id'] = numpy.arange(len(events))
         # set event year and event ses starting from 1
         itime = int(self.oqparam.investigation_time)
+        #itime = int(self.oqparam.forecasting_time)
         nses = self.oqparam.ses_per_logic_tree_path
         extra = numpy.zeros(len(events), [('year', U16), ('ses_id', U16)])
         numpy.random.seed(self.oqparam.ses_seed)
@@ -301,14 +316,16 @@ class EventBasedCalculator(base.HazardCalculator):
         else:  # from sources
             self.build_events_from_sources(srcfilter)
             if (oq.ground_motion_fields is False and
-                    oq.hazard_curves_from_gmfs is False):
+                oq.hazard_curves_from_gmfs is False):
                 return {}
         if not oq.imtls:
             raise InvalidFile('There are no intensity measure types in %s' %
                               oq.inputs['job_ini'])
         N = len(self.sitecol.complete)
         if oq.ground_motion_fields:
+
             nrups = len(self.datastore['ruptures'])
+
             self.datastore.create_dset('gmf_data/data', oq.gmf_data_dt())
             self.datastore.create_dset('gmf_data/sigma_epsilon',
                                        sig_eps_dt(oq.imtls))
@@ -326,6 +343,8 @@ class EventBasedCalculator(base.HazardCalculator):
         iterargs = ((rgetter, srcfilter, self.param)
                     for rgetter in gen_rupture_getters(
                             self.datastore, srcfilter, oq.concurrent_tasks))
+
+        # parallel compute_gmfs
         acc = parallel.Starmap(
             self.core_task.__func__, iterargs, h5=self.datastore.hdf5,
             num_cores=oq.num_cores

@@ -18,7 +18,11 @@ Module :mod:`openquake.hazardlib.source.base` defines a base class for
 seismic sources.
 """
 import abc
+import logging
+
 import numpy
+from scipy.special import loggamma
+
 from openquake.hazardlib.geo import Point
 from openquake.hazardlib.source.rupture import ParametricProbabilisticRupture
 
@@ -109,25 +113,44 @@ class BaseSeismicSource(metaclass=abc.ABCMeta):
         rup_id = self.serial
         numpy.random.seed(self.serial)
         for grp_id in self.grp_ids:
-            for rup, num_occ in self._sample_ruptures(eff_num_ses):
+            #for rup, num_occ in self._sample_ruptures(eff_num_ses):
+            for rup, num_occ, proba_occ in self._sample_ruptures(eff_num_ses):
                 rup.rup_id = rup_id
                 rup_id += 1
-                yield rup, grp_id, num_occ
+                #yield rup, grp_id, num_occ
+                yield rup, grp_id, num_occ, proba_occ
 
     def _sample_ruptures(self, eff_num_ses):
+        print(f"Calling {self}._sample_ruptures w/params:")
+        print(f"eff_num_ses: {eff_num_ses}")
+
         tom = getattr(self, 'temporal_occurrence_model', None)
         if tom:  # time-independent source
+            print(f"time-independent source")
+            print(f"Calling {self}.sample_ruptures_poissonian w/param: {eff_num_ses}")
+
             yield from self.sample_ruptures_poissonian(eff_num_ses)
         else:  # time-dependent source (nonparametric)
+            print(f"time-dependent source (nonparametric)")
             mutex_weight = getattr(self, 'mutex_weight', 1)
+            print(f"mutex_weight: {mutex_weight}")
             for rup in self.iter_ruptures():
+                print(f"rup: {rup.rup_id}")
+                print(f"calling rup.sample_number_of_occurrences(eff_num_ses) w/params:")
+                print(f"eff_num_ses: {eff_num_ses}")
                 occurs = rup.sample_number_of_occurrences(eff_num_ses)
+                print(f"len(occurs): {len(occurs)}")
                 if mutex_weight < 1:
+                    print(f"as mutex_weight < 1 occurs pass to:")
                     # consider only the occurrencies below the mutex_weight
-                    occurs *= (numpy.random.random(eff_num_ses) < mutex_weight)
+                    aux = numpy.random.random(eff_num_ses)
+                    occurs *= (aux < mutex_weight)
+                    print(f"len(occurs): {len(occurs)}")
                 num_occ = occurs.sum()
+                proba_occ = rup.proba_number_of_occurrences(num_occ)
+                print(f"Finally num_occ for {rup.rup_id} is: {num_occ}")
                 if num_occ:
-                    yield rup, num_occ
+                    yield rup, num_occ, proba_occ
 
     def get_mags(self):
         """
@@ -150,17 +173,31 @@ class BaseSeismicSource(metaclass=abc.ABCMeta):
         """
         tom = self.temporal_occurrence_model
         if not hasattr(self, 'nodal_plane_distribution'):  # fault
+            print(f"fault source: {self.source_id}, {self.name}")
             ruptures = list(self.iter_ruptures())
+            print(f"ruptures of the fault source: {[rup.rup_id for rup in ruptures]}")
             rates = numpy.array([rup.occurrence_rate for rup in ruptures])
-            occurs = numpy.random.poisson(rates * tom.time_span * eff_num_ses)
-            for rup, num_occ in zip(ruptures, occurs):
+            print(f"len(rates) of the fault source: {len(rates)}")
+            print(f"calling numpy.random.poisson(rates * tom.time_span * eff_num_ses) in sample_ruptures_poissonian w/params:")
+            #print(f"rates * tom.time_span * eff_num_ses: {rates} * {tom.time_span} * {eff_num_ses} = {rates * tom.time_span * eff_num_ses}")
+
+            ## sampling y proba
+            lambda_ = rates * tom.time_span * eff_num_ses
+            occurs = numpy.random.poisson(lambda_)
+            probas = numpy.exp(occurs * numpy.log(lambda_) - lambda_ - loggamma(occurs+1))
+            print(f"len(occurs): {len(occurs)}")
+
+            for rup, num_occ, proba_occ in zip(ruptures, occurs, probas):
                 if num_occ:
-                    yield rup, num_occ
+                    yield rup, num_occ, proba_occ
             return
         # else (multi)point sources and area sources
+        print(f"multipoint or area source: {self.source_id}, {self.name}")
         rup_args = []
         rates = []
         for src in self:
+            print(f"src in sample_ruptures_poissonian: {src.source_id}, {src.name}")
+
             for mag, mag_occ_rate in src.get_annual_occurrence_rates():
                 if mag < self.min_mag:
                     continue
@@ -171,8 +208,18 @@ class BaseSeismicSource(metaclass=abc.ABCMeta):
                         rup_args.append(args)
                         rates.append(mag_occ_rate * np_prob * hc_prob)
         eff_rates = numpy.array(rates) * tom.time_span * eff_num_ses
+        print(f"calling numpy.random.poisson(eff_rates) w/params:")
+        print(f"eff_rates = numpy.array(rates) * tom.time_span * eff_num_ses where:")
+        print(f"len(rates) = len(mag_occ_rate * np_prob * hc_prob) = {len(rates)}")
+        print(f"tom.time_span = {tom.time_span}")
+        print(f"eff_num_ses = {eff_num_ses}")
+
+        # sampling and proba
         occurs = numpy.random.poisson(eff_rates)
-        for num_occ, args, rate in zip(occurs, rup_args, rates):
+        probas = numpy.exp(occurs * numpy.log(eff_rates) - eff_rates - loggamma(occurs + 1))
+        print(f"len(occurs): {len(occurs)}")
+
+        for num_occ, args, rate, proba_occ in zip(occurs, rup_args, rates, probas):
             if num_occ:
                 mag_occ_rate, np_prob, hc_prob, mag, np, hc_depth, src = args
                 hc = Point(latitude=src.location.latitude,
@@ -182,7 +229,7 @@ class BaseSeismicSource(metaclass=abc.ABCMeta):
                 rup = ParametricProbabilisticRupture(
                     mag, np.rake, src.tectonic_region_type, hc,
                     surface, rate, tom)
-                yield rup, num_occ
+                yield rup, num_occ, proba_occ
 
     @abc.abstractmethod
     def get_one_rupture(self, rupture_mutex=False):
