@@ -199,7 +199,7 @@ class ComplexFaultSource(ParametricSeismicSource):
                         self.source_id, str(e)))
                 rup = ParametricProbabilisticRupture(
                     mag, self.rake, self.tectonic_region_type, hypocenter,
-                    surface, occurrence_rate, self.temporal_occurrence_model)
+                    surface, occurrence_rate, self.temporal_occurrence_model,source_id=self.source_id)
                 rup.mag_occ_rate = mag_occ_rate
                 yield rup
 

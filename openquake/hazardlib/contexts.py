@@ -112,8 +112,10 @@ class RupData(object):
         :param grp_ids: a tuple of indices associated to the ruptures
         """
         U, N = len(ctxs), len(sites.complete)
+
         params = (sorted(self.cmaker.REQUIRES_DISTANCES | {'rrup'}) +
                   ['lon', 'lat'])
+
         data = {par + '_': numpy.ones((U, N), F32) * 9999 for par in params}
         for par in data:
             self.data[par].append(data[par])
@@ -126,11 +128,14 @@ class RupData(object):
             self.data['probs_occur'].append(probs_occur)
             self.data['weight'].append(rup.weight or numpy.nan)
             self.data['grp_id'].append(grp_ids)
+            self.data['source_id'].append(rup.source_id)
             for rup_param in self.cmaker.REQUIRES_RUPTURE_PARAMETERS:
                 self.data[rup_param].append(getattr(rup, rup_param))
             for dst_param in params:  # including lon, lat
                 for s, dst in zip(sites.sids, getattr(dctx, dst_param)):
                     data[dst_param + '_'][r, s] = dst
+
+            #print(f"self.cmaker.REQUIRES_RUPTURE_PARAMETERS in RupData.add: {self.cmaker.REQUIRES_RUPTURE_PARAMETERS}")
 
     def dictarray(self):
         """
@@ -247,6 +252,11 @@ class ContextMaker(object):
         """
         Add .REQUIRES_RUPTURE_PARAMETERS to the rupture
         """
+        ########################
+        #print(f"self.REQUIRES_RUPTURE_PARAMETERS: {self.REQUIRES_RUPTURE_PARAMETERS}")
+        ########################
+
+
         for param in self.REQUIRES_RUPTURE_PARAMETERS:
             if param == 'mag':
                 value = rupture.mag
@@ -401,6 +411,12 @@ class PmapMaker(object):
         self.pne_mon = cmaker.mon('composing pnes', measuremem=False)
         self.gmf_mon = cmaker.mon('computing mean_std', measuremem=False)
 
+
+        #####################################
+        print(f"len(srcfilter.sitecol: {srcfilter.sitecol}")
+        print(f"cmarker.max_sites_disagg: {cmaker.max_sites_disagg}")
+        ###################################
+
     def _gen_ctxs(self, rups, sites, grp_ids):
         # generate triples (rup, sites, dctx)
         rup_param = not numpy.isnan([r.occurrence_rate for r in rups]).any()
@@ -468,23 +484,36 @@ class PmapMaker(object):
             grp_ids = numpy.array(srcs[0].grp_ids)
             self.numrups = 0
             self.numsites = 0
-            if self.fewsites:
-                # we can afford using a lot of memory to store the ruptures
-                rups = self._get_rups(srcs, sites)
-                # print_finite_size(rups)
-                with self.ctx_mon:
-                    ctxs = list(self._gen_ctxs(rups, sites, grp_ids))
-                self._update_pmap(ctxs)
-            else:
-                # many sites: keep in memory less ruptures
-                for src in srcs:
-                    for rup in self._get_rups([src], sites):
-                        with self.ctx_mon:
-                            ctxs = self.cmaker.make_ctxs(
-                                [rup], rup.sites, grp_ids, filt=True)
-                        self.numrups += len(ctxs)
-                        self.numsites += sum(len(ctx[1]) for ctx in ctxs)
-                        self._update_pmap(ctxs)
+
+            ###########################################################
+            #print(f"self.fewsites: {self.fewsites}")
+            # we can afford using a lot of memory to store the ruptures
+            rups = self._get_rups(srcs, sites)
+            # print_finite_size(rups)
+            with self.ctx_mon:
+                ctxs = list(self._gen_ctxs(rups, sites, grp_ids))
+            self._update_pmap(ctxs)
+            ###########################################################
+
+            # if self.fewsites:
+            #     # we can afford using a lot of memory to store the ruptures
+            #     rups = self._get_rups(srcs, sites)
+            #     # print_finite_size(rups)
+            #     with self.ctx_mon:
+            #         ctxs = list(self._gen_ctxs(rups, sites, grp_ids))
+            #     self._update_pmap(ctxs)
+            # else:
+            #     # many sites: keep in memory less ruptures
+            #     for src in srcs:
+            #         for rup in self._get_rups([src], sites):
+            #             with self.ctx_mon:
+            #                 ctxs = self.cmaker.make_ctxs(
+            #                     [rup], rup.sites, grp_ids, filt=True)
+            #             self.numrups += len(ctxs)
+            #             self.numsites += sum(len(ctx[1]) for ctx in ctxs)
+            #             self._update_pmap(ctxs)
+
+
             self.calc_times[src_id] += numpy.array(
                 [self.numrups, self.numsites, time.time() - t0])
         return AccumDict((grp_id, ~p if self.rup_indep else p)
@@ -601,19 +630,27 @@ class PmapMaker(object):
                 for pr in src.point_ruptures():
                     pdist = self.pointsource_distance['%.2f' % pr.mag]
                     close, far = sites.split(pr.hypocenter, pdist)
-                    if self.fewsites:
-                        if close is None:  # all is far, common for small mag
-                            _add([pr], sites)
-                        else:  # something is close
-                            _add(self._ruptures(src, pr.mag), sites)
-                    else:  # many sites
-                        if close is None:  # all is far
-                            _add([pr], far)
-                        elif far is None:  # all is close
-                            _add(self._ruptures(src, pr.mag), close)
-                        else:  # some sites are far, some are close
-                            _add([pr], far)
-                            _add(self._ruptures(src, pr.mag), close)
+
+                    ######################################################
+                    # if close is None:  # all is far, common for small mag
+                    #     _add([pr], sites)
+                    # else:  # something is close
+                    #     _add(self._ruptures(src, pr.mag), sites)
+                    #####################################################
+                    #if self.fewsites:
+                    if close is None:  # all is far, common for small mag
+                        _add([pr], sites)
+                    else:  # something is close
+                        _add(self._ruptures(src, pr.mag), sites)
+                    #else:  # many sites
+                    if close is None:  # all is far
+                        _add([pr], far)
+                    elif far is None:  # all is close
+                        _add(self._ruptures(src, pr.mag), close)
+                    else:  # some sites are far, some are close
+                        _add([pr], far)
+                        _add(self._ruptures(src, pr.mag), close)
+
             else:  # just add the ruptures
                 _add(self._ruptures(src), sites)
         return rups
@@ -870,6 +907,8 @@ def get_effect(mags, sitecol1, gsims_by_trt, oq):
 
     Updates oq.maximum_distance.magdist
     """
+
+
     assert list(mags) == list(gsims_by_trt), 'Missing TRTs!'
     dist_bins = {trt: oq.maximum_distance.get_dist_bins(trt)
                  for trt in gsims_by_trt}
@@ -904,6 +943,8 @@ def get_effect(mags, sitecol1, gsims_by_trt, oq):
         dic = {trt: [(float(mag), int(dst)) for mag, dst in psd[trt].items()]
                for trt in psd if trt != 'default'}
         logging.info('Using pointsource_distance=\n%s', pprint.pformat(dic))
+
+
     return aw, psd
 
 

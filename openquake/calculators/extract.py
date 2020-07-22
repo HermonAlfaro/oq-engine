@@ -496,7 +496,7 @@ def extract_effect(dstore, what):
 
 
 @extract.add('rups_by_mag_dist')
-def extract_rups_by_mag_dist(dstore, what):
+def extract_rups_by_mag_dist(dstore, what=None):
     """
     Extracts the number of ruptures by mag, dist.
     Use it as /extract/rups_by_mag_dist
@@ -1254,10 +1254,16 @@ def extract_rupture_info(dstore, what):
     else:
         min_mag = 0
     oq = dstore['oqparam']
-    dtlist = [('rup_id', U32),('occurrence_rate',F32), ('multiplicity', U16), ('mag', F32),
+    # dtlist = [('rup_id', U32),('occurrence_rate',F32), ('multiplicity', U16), ('mag', F32),
+    #           ('centroid_lon', F32), ('centroid_lat', F32),
+    #           ('centroid_depth', F32), ('trt', '<S50'),
+    #           ('strike', F32), ('dip', F32), ('rake', F32),('proba_occ',F32)]
+
+    dtlist = [('rup_id', U32), ('occurrence_rate', F32), ('multiplicity', U16), ('mag', F32),
               ('centroid_lon', F32), ('centroid_lat', F32),
               ('centroid_depth', F32), ('trt', '<S50'),
-              ('strike', F32), ('dip', F32), ('rake', F32),('proba_occ',F32)]
+              ('strike', F32), ('dip', F32), ('rake', F32)]
+
     rows = []
     boundaries = []
     for rgetter in getters.gen_rgetters(dstore):
@@ -1271,10 +1277,15 @@ def extract_rupture_info(dstore, what):
                 boundaries.append('LINESTRING(%s)' % ', '.join(coordset))
             else:  # good polygon
                 boundaries.append('POLYGON((%s))' % ', '.join(coords))
+            # rows.append(
+            #     (r['rup_id'],r['occurrence_rate'] ,r['multiplicity'], r['mag'],
+            #      r['lon'], r['lat'], r['depth'],
+            #      rgetter.trt, r['strike'], r['dip'], r['rake'],r['proba_occ']))
             rows.append(
-                (r['rup_id'],r['occurrence_rate'] ,r['multiplicity'], r['mag'],
+                (r['rup_id'], r['occurrence_rate'], r['multiplicity'], r['mag'],
                  r['lon'], r['lat'], r['depth'],
-                 rgetter.trt, r['strike'], r['dip'], r['rake'],r['proba_occ']))
+                 rgetter.trt, r['strike'], r['dip'], r['rake']))
+
     arr = numpy.array(rows, dtlist)
     geoms = gzip.compress('\n'.join(boundaries).encode('utf-8'))
     return ArrayWrapper(arr, dict(investigation_time=oq.investigation_time,

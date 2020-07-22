@@ -132,6 +132,11 @@ def classical(group, src_filter, gsims, param, monitor=Monitor()):
     if cluster:
         tom = getattr(group, 'temporal_occurrence_model')
         pmap = _cluster(param['imtls'], tom, gsims, pmap)
+
+    #########################
+    #print(f"rup_data in classical: {rup_data}")
+    ##########################
+
     return dict(pmap=pmap, calc_times=calc_times, rup_data=rup_data,
                 extra=extra)
 

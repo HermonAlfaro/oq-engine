@@ -25,6 +25,7 @@ import tempfile
 import importlib
 import itertools
 from numbers import Number
+from copy import deepcopy
 from urllib.parse import quote_plus, unquote_plus
 import collections
 import toml
@@ -95,18 +96,33 @@ def extend(dset, array, **attrs):
     :param array: an array of length L
     :returns: the total length of the dataset (i.e. initial length + L)
     """
+    #print("-------------------------------------------------")
+    #print(f"array in extend: {array}")
+    #print(f"array.dtype.name: {array.dtype.name}")
+    #print(f"attrs in extend: {attrs}")
+
     length = len(dset)
+    #print(f"length: {length}")
     if len(array) == 0:
+        #print(f"len(array): {len(array)}")
         return length
     newlength = length + len(array)
+    #print(f"newlength: {newlength}")
     if array.dtype.name == 'object':  # vlen array
         shape = (newlength,) + preshape(array[0])
+        #print(f"shape: {shape}")
     else:
         shape = (newlength,) + array.shape[1:]
     dset.resize(shape)
+    #print(f"dset.resize(shape) done")
     dset[length:newlength] = array
+    #print(f"dset[length:newlength] done")
     for key, val in attrs.items():
         dset.attrs[key] = val
+
+    #print(f"return extend: {newlength}")
+    #print("-------------------------------------------------")
+
     return newlength
 
 
@@ -427,6 +443,7 @@ class ArrayWrapper(object):
         if len(array):
             self.array = array
 
+
     def __iter__(self):
         if hasattr(self, 'array'):
             return iter(self.array)
@@ -704,3 +721,11 @@ def read_csv(fname, dtypedict={None: float}, renamedict={}, sep=','):
             newnames.append(new)
         arr.dtype.names = newnames
     return ArrayWrapper(arr, attrs)
+
+def mask_array(aw, mask):
+
+    aw_aux = deepcopy(aw)
+
+    aw_aux.array = aw_aux.array[mask]
+
+    return aw_aux

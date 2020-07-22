@@ -122,7 +122,7 @@ class EventBasedCalculator(base.HazardCalculator):
             srcfilter = nofilter  # otherwise it would be ultra-slow
         for sg in self.csm.src_groups:
 
-            print(f"sg: {sg}")
+            #print(f"sg: {sg}")
             if not sg.sources:
                 continue
             logging.info('Sending %s', sg)
@@ -137,13 +137,23 @@ class EventBasedCalculator(base.HazardCalculator):
         mon = self.monitor('saving ruptures')
 
         for dic in smap:
+
+            if dic['source_ids']:
+                self.rupser.save_source_ids(dic['source_ids'])
+
             if dic['calc_times']:
                 calc_times += dic['calc_times']
             if dic['eff_ruptures']:
                 eff_ruptures += dic['eff_ruptures']
             if dic['rup_array']:
+                #print(f"len(dic['rup_array']): {len(dic['rup_array'])}")
                 with mon:
                     self.rupser.save(dic['rup_array'])
+
+            if dic['rup_array'] and dic['source_ids']:
+                assert len(dic['source_ids'])==len(dic['rup_array']), (len(dic['source_ids']),len(dic['rup_array']))
+
+
         self.rupser.close()
         if not self.rupser.nruptures:
             raise RuntimeError('No ruptures were generated, perhaps the '
@@ -155,16 +165,32 @@ class EventBasedCalculator(base.HazardCalculator):
         with self.monitor('store source_info'):
             self.store_source_info(calc_times)
         logging.info('Reordering the ruptures and storing the events')
+
         sorted_ruptures = self.datastore.getitem('ruptures')[()]
 
-        print(f"sorted_ruptures: {sorted_ruptures}")
+        sorted_erf = self.datastore.getitem("rup")[()]
 
         # order the ruptures by rup_id
         sorted_ruptures.sort(order='serial')
+
+        sorted_erf.sort(order='serial')
+
         nr = len(sorted_ruptures)
+
+        nr_erf = len(sorted_erf)
+
+
         assert len(numpy.unique(sorted_ruptures['serial'])) == nr  # sanity
         self.datastore['ruptures'] = sorted_ruptures
         self.datastore['ruptures']['id'] = numpy.arange(nr)
+
+        self.datastore['rup'] = sorted_erf
+        self.datastore['rup']['id'] = numpy.arange(nr_erf)
+
+        print(f"random_seed: {self.oqparam.random_seed}")
+        print(f"ses_seed: {self.oqparam.ses_seed}")
+
+
         with self.monitor('saving events'):
             self.save_events(sorted_ruptures)
 
@@ -173,9 +199,6 @@ class EventBasedCalculator(base.HazardCalculator):
         :param acc: accumulator dictionary
         :param result: an AccumDict with events, ruptures, gmfs and hcurves
         """
-
-        #print(type(result))
-        #print(result.keys())
 
         sav_mon = self.monitor('saving gmfs')
         agg_mon = self.monitor('aggregating hcurves')
@@ -210,8 +233,9 @@ class EventBasedCalculator(base.HazardCalculator):
         :returns: a list of RuptureGetters
         """
         # this is very fast compared to saving the ruptures
-        eids = rupture.get_eids(
-            rup_array, self.samples_by_grp, self.num_rlzs_by_grp)
+
+        eids = rupture.get_eids(rup_array, self.samples_by_grp, self.num_rlzs_by_grp)
+
         self.check_overflow()  # check the number of events
         events = numpy.zeros(len(eids), rupture.events_dt)
         # when computing the events all ruptures must be considered,
@@ -219,6 +243,8 @@ class EventBasedCalculator(base.HazardCalculator):
         rgetters = gen_rgetters(self.datastore)
         # build the associations eid -> rlz sequentially or in parallel
         # this is very fast: I saw 30 million events associated in 1 minute!
+
+
         logging.info('Building assocs event_id -> rlz_id for {:_d} events'
                      ' and {:_d} ruptures'.format(len(events), len(rup_array)))
         if len(events) < 1E5:
@@ -240,19 +266,23 @@ class EventBasedCalculator(base.HazardCalculator):
         events.sort(order='rup_id')  # fast too
         # sanity check
         n_unique_events = len(numpy.unique(events[['id', 'rup_id']]))
+
         assert n_unique_events == len(events), (n_unique_events, len(events))
+
         events['id'] = numpy.arange(len(events))
         # set event year and event ses starting from 1
         itime = int(self.oqparam.investigation_time)
-        #itime = int(self.oqparam.forecasting_time)
         nses = self.oqparam.ses_per_logic_tree_path
         extra = numpy.zeros(len(events), [('year', U16), ('ses_id', U16)])
+
+        # seed for year and ses_id
         numpy.random.seed(self.oqparam.ses_seed)
         extra['year'] = numpy.random.choice(itime, len(events)) + 1
         extra['ses_id'] = numpy.random.choice(nses, len(events)) + 1
         self.datastore['events'] = util.compose_arrays(events, extra)
         eindices = get_indices(events['rup_id'])
         arr = numpy.array(list(eindices.values()))[:, 0, :]
+
         self.datastore['ruptures']['e0'] = arr[:, 0]
         self.datastore['ruptures']['e1'] = arr[:, 1]
 

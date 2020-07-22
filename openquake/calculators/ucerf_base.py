@@ -355,7 +355,7 @@ class UCERFSource(BaseSeismicSource):
         rupture = ParametricProbabilisticRupture(
             mag, self.rake[iloc - self.start], trt,
             surface_set[len(surface_set) // 2].get_middle_point(),
-            MultiSurface(surface_set), self.rate[iloc - self.start], self.tom)
+            MultiSurface(surface_set), self.rate[iloc - self.start], self.tom,source_id=self.source_id)
 
         return rupture
 

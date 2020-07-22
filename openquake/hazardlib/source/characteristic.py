@@ -85,7 +85,7 @@ class CharacteristicFaultSource(ParametricSeismicSource):
         for mag, occurrence_rate in self.get_annual_occurrence_rates():
             yield ParametricProbabilisticRupture(
                 mag, self.rake, self.tectonic_region_type, hypocenter,
-                self.surface, occurrence_rate, self.temporal_occurrence_model)
+                self.surface, occurrence_rate, self.temporal_occurrence_model,source_id=self.source_id)
 
     def count_ruptures(self):
         """

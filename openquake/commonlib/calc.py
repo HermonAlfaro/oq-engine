@@ -19,7 +19,7 @@ import warnings
 import numpy
 
 from openquake.baselib import hdf5
-from openquake.hazardlib.source.rupture import BaseRupture
+from openquake.hazardlib.source.rupture import BaseRupture, filter_rup_by_n_occ
 from openquake.hazardlib import calc, probability_map
 
 TWO16 = 2 ** 16
@@ -244,18 +244,38 @@ class RuptureSerializer(object):
                               attrs={'nbytes': 0})
         datastore.create_dset('rupgeoms', calc.stochastic.point3d)
 
+        datastore.create_dset('rup', calc.stochastic.rupture_dt)
+        datastore.create_dset('rup_geoms',calc.stochastic.point3d)
+
+        datastore.create_dset('source_ids', calc.stochastic.source_ids_dt)
+
     def save(self, rup_array):
         """
          Store the ruptures in array format.
         """
+        rup_array_masked = filter_rup_by_n_occ(rup_array)
+
         self.nruptures += len(rup_array)
         offset = len(self.datastore['rupgeoms'])
         rup_array.array['gidx1'] += offset
         rup_array.array['gidx2'] += offset
-        hdf5.extend(self.datastore['ruptures'], rup_array)
-        hdf5.extend(self.datastore['rupgeoms'], rup_array.geom)
+        rup_array_masked.array['gidx1'] += offset
+        rup_array_masked.array['gidx2'] += offset
+        hdf5.extend(self.datastore['ruptures'], rup_array_masked)
+        hdf5.extend(self.datastore['rupgeoms'], rup_array_masked.geom)
+        hdf5.extend(self.datastore['rup'], rup_array)
+        hdf5.extend(self.datastore['rup_geoms'], rup_array.geom)
+        rup_array = rup_array_masked
         # TODO: PMFs for nonparametric ruptures are not stored
         self.datastore.flush()
+
+    def save_source_ids(self, source_ids_array):
+
+        #print(f"len(source_ids_array) in save_source_ids: {len(source_ids_array)}")
+
+        hdf5.extend(self.datastore['source_ids'], source_ids_array)
+
+
 
     def close(self):
         """

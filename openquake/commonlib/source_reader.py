@@ -28,8 +28,66 @@ from openquake.baselib import parallel, general
 from openquake.hazardlib import nrml, sourceconverter, calc, InvalidFile
 from openquake.hazardlib.lt import apply_uncertainties
 
-TWO16 = 2 ** 16  # 65,536
 
+######################################################################
+# from openquake.hazardlib.source.rupture import BaseRupture
+# import tqdm
+#
+# from openquake.hazardlib.geo.mesh import surface_to_array
+# import pandas as pd
+#
+# U16 = numpy.uint16
+# U32 = numpy.uint32
+# F32 = numpy.float32
+# TWO16 = 2 ** 16
+# TWO32 = 2 ** 32
+# pmf_dt = numpy.dtype([('prob', float), ('occ', U32)])
+# events_dt = numpy.dtype([('id', U32), ('rup_id', U32), ('rlz_id', U16)])
+# code2cls = {}
+#
+# def float5(x):
+#     # a float with 5 digits
+#     return round(float(x), 5)
+#
+# def _fixfloat32(dic):
+#     # work around a TOML/numpy issue
+#     for k, v in dic.items():
+#         if isinstance(v, F32):
+#             dic[k] = float5(v)
+#         elif isinstance(v, tuple):
+#             dic[k] = [float5(x) for x in v]
+#         elif isinstance(v, numpy.ndarray):
+#             dic[k] = [[float5(y) for y in x] for x in v]
+#
+#
+# def rup2df(self):
+#     """
+#     :returns: a representation of the rupture as a dict
+#     """
+#     if not code2cls:
+#         code2cls.update(BaseRupture.init())
+#     hypo_lon = self.hypocenter.x
+#     hypo_lat = self.hypocenter.y
+#     hypo_depth = self.hypocenter.z
+#     mesh = surface_to_array(self.surface)  # shape (3, sy, sz)
+#     sy, sz = mesh.shape[1:]
+#     dic = {'serial': [int(self.rup_id)],
+#            'mag': [self.mag],
+#            'rake': [self.rake],
+#            'centroid_lon': [hypo_lon],
+#            'centroid_lat': [hypo_lat],
+#            'centroid_depth': [hypo_depth],
+#            'trt': [self.tectonic_region_type],
+#            'code': [self.code],
+#            'occurrence_rate': [self.occurrence_rate],
+#            'rupture_cls': [self.__class__.__name__],
+#            'surface_cls': [self.surface.__class__.__name__],
+#            }
+#     _fixfloat32(dic)
+#     return pd.DataFrame().from_dict(dic)
+###################################
+
+TWO16 = 2 ** 16
 
 def random_filtered_sources(sources, srcfilter, seed):
     """
@@ -67,6 +125,7 @@ def get_csm(oq, full_lt, h5=None):
     Build source models from the logic tree and to store
     them inside the `source_full_lt` dataset.
     """
+    print(f"--- get_csm ---")
     if oq.pointsource_distance is None:
         spinning_off = False
     else:
@@ -80,6 +139,7 @@ def get_csm(oq, full_lt, h5=None):
         not spinning_off, oq.source_id, discard_trts=oq.discard_trts)
     logging.info('%d effective smlt realization(s)', len(full_lt.sm_rlzs))
     classical = not oq.is_event_based()
+
     if oq.is_ucerf():
         sample = .001 if os.environ.get('OQ_SAMPLE_SOURCES') else None
         [grp] = nrml.to_python(oq.inputs["source_model"], converter)
@@ -130,6 +190,28 @@ def get_csm(oq, full_lt, h5=None):
     if changes:
         logging.info('Applied %d changes to the composite source model',
                      changes)
+
+    #res = _get_csm(full_lt, groups)
+
+    # #########################################################################
+    # logging.info(f"Working for EarthQuake Ruptures Forecast")
+    # srcs = [src for sg in res.src_groups for src in sg]
+    # ruptures = [rup for src in srcs for rup in src.iter_ruptures()]
+    #
+    # rup_df = rup2df(ruptures[0])
+    #
+    # for i in tqdm.tqdm(range(1, len(ruptures))):
+    #     rup = ruptures[i]
+    #     try:
+    #         df = rup2df(rup)
+    #         rup_df = pd.concat([rup_df, df], axis=0, ignore_index=True)
+    #         rup_df.to_csv("ruptures_from_source_tmp.csv", index=None)
+    #         rup_df.to_csv("ruptures_from_source.csv", index=None)
+    #     except Exception as e:
+    #         logging.error(f"Error in iteration {i}: {e}")
+    #         break
+    #############################################################################################3
+
     return _get_csm(full_lt, groups)
 
 
@@ -232,6 +314,7 @@ def _get_csm(full_lt, groups):
             src._wkt = src.wkt()
             idx += 1
     src_groups = list(dic.values()) + atomic
+
     return CompositeSourceModel(full_lt, src_groups)
 
 

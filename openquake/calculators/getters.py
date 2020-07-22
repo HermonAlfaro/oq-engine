@@ -453,7 +453,7 @@ def group_by_rlz(data, rlzs):
     return {rlzi: numpy.array(recs) for rlzi, recs in acc.items()}
 
 
-def gen_rgetters(dstore, slc=slice(None)):
+def gen_rgetters(dstore, slc=slice(None),erf=False):
     """
     :yields: unfiltered RuptureGetters
     """
@@ -461,8 +461,8 @@ def gen_rgetters(dstore, slc=slice(None)):
     trt_by_grp = full_lt.trt_by_grp
     samples = full_lt.get_samples_by_grp()
     rlzs_by_gsim = full_lt.get_rlzs_by_gsim_grp()
-    rup_array = dstore['ruptures'][slc]
-    nr = len(dstore['ruptures'])
+    rup_array = dstore['rup'][slc] if erf else dstore['ruptures'][slc]
+    nr = len(dstore['rup']) if erf else len(dstore['ruptures'])
     for grp_id, arr in general.group_array(rup_array, 'grp_id').items():
         if not rlzs_by_gsim.get(grp_id, []):  # the model has no sources
             continue
@@ -480,7 +480,7 @@ def _gen(arr, srcfilter, trt, samples):
             yield RuptureProxy(rec, len(sids), samples)
 
 
-def gen_rupture_getters(dstore, srcfilter, ct):
+def gen_rupture_getters(dstore, srcfilter, ct, erf=False):
     """
     :param dstore: a :class:`openquake.baselib.datastore.DataStore`
     :param srcfilter: a :class:`openquake.hazardlib.calc.filters.SourceFilter`
@@ -491,7 +491,7 @@ def gen_rupture_getters(dstore, srcfilter, ct):
     trt_by_grp = full_lt.trt_by_grp
     samples = full_lt.get_samples_by_grp()
     rlzs_by_gsim = full_lt.get_rlzs_by_gsim_grp()
-    rup_array = dstore['ruptures'][()]
+    rup_array = dstore['ruptures'][()] if erf else dstore['ruptures'][()]
     items = list(general.group_array(rup_array, 'grp_id').items())
     items.sort(key=lambda item: len(item[1]))  # other weights were much worse
     maxweight = None
@@ -583,6 +583,10 @@ class RuptureGetter(object):
             for rlz_id, eids in ebr.get_eids_by_rlz(self.rlzs_by_gsim).items():
                 for eid in eids:
                     eid_rlz.append((eid + rup['e0'], rup['id'], rlz_id))
+
+        #rup_ids = [rup['id'] for rup in self.proxies]
+        #print(f"rup_ids: {rup_ids}")
+
         return numpy.array(eid_rlz, events_dt)
 
     def get_rupdict(self):

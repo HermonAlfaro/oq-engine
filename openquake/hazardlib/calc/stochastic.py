@@ -45,6 +45,13 @@ I32 = numpy.int32
 F32 = numpy.float32
 MAX_RUPTURES = 2000
 
+source_ids_dt = numpy.dtype([
+    ('source_id', hdf5.vstr),          # 0
+    ('srcidx', U32),                    # 1
+    ('trt', hdf5.vstr)                 # 2
+])
+
+
 
 # this is used in acceptance/stochastic_test.py, not in the engine
 def stochastic_event_set(sources, source_site_filter=nofilter, **kwargs):
@@ -96,7 +103,7 @@ rupture_dt = numpy.dtype([
     ('minlon', F32), ('minlat', F32), ('maxlon', F32), ('maxlat', F32),
     ('hypo', (F32, 3)), ('gidx1', U32), ('gidx2', U32),
     ('sx', U16), ('sy', U16), ('e0', U32), ('e1', U32),('proba_occ',F32)])
-
+    #,('source_id', hdf5.vstr)])
 
 # this is really fast
 def get_rup_array(ebruptures, srcfilter=nofilter):
@@ -127,7 +134,7 @@ def get_rup_array(ebruptures, srcfilter=nofilter):
         rec['maxlat'] = maxlat = points[:, 1].max()
         rec['mag'] = rup.mag
         rec['hypo'] = hypo
-        rec['proba_occ'] = ebrupture.proba_occ
+
         if srcfilter.integration_distance and len(
                 srcfilter.close_sids(rec, rup.tectonic_region_type)) == 0:
             continue
@@ -136,6 +143,7 @@ def get_rup_array(ebruptures, srcfilter=nofilter):
                rup.code, ebrupture.n_occ, rup.mag, rup.rake, rate,
                minlon, minlat, maxlon, maxlat, hypo,
                offset, offset + len(points), sy, sz, 0, 0,ebrupture.proba_occ)
+               #,ebrupture.source_id)
         offset += len(points)
         rups.append(tup)
         geoms.append(numpy.array([tuple(p) for p in points], point3d))
@@ -163,11 +171,6 @@ def sample_cluster(sources, srcfilter, num_ses, param):
         dictionaries with keys rup_array, calc_times, eff_ruptures
     """
 
-    print(f"Calling sample_cluster w/params:")
-    print(f"sources: {sources}")
-    print(f"srcfilter: {srcfilter}")
-    print(f"num_ses: {num_ses}")
-    print(f"param: {param}")
 
     eb_ruptures = []
     numpy.random.seed(sources[0].serial)
@@ -184,9 +187,9 @@ def sample_cluster(sources, srcfilter, num_ses, param):
     # Note that using a single time interval corresponding to the product
     # of the investigation time and the number of realisations as we do
     # here is admitted only in the case of a time-independent model
-    print(f"Calling numpy.random.poisson w/lambda:")
-    print(f"lambda=rate * time_span * samples * num_ses: {rate * time_span * samples * num_ses}")
-    print(f"rate={rate}, time_span={time_span}, samples={samples}, num_ses={num_ses}")
+    #print(f"Calling numpy.random.poisson w/lambda:")
+    #print(f"lambda=rate * time_span * samples * num_ses: {rate * time_span * samples * num_ses}")
+    #print(f"rate={rate}, time_span={time_span}, samples={samples}, num_ses={num_ses}")
 
     ## Sampling
     lambda_ = rate * time_span * samples * num_ses
@@ -195,7 +198,7 @@ def sample_cluster(sources, srcfilter, num_ses, param):
     grp_num_occ = numpy.random.poisson(lambda_)
 
 
-    print(f"len(grp_num_occ): {len(grp_num_occ)}")
+    #print(f"len(grp_num_occ): {len(grp_num_occ)}")
     # Now we process the sources included in the group. Possible cases:
     # * The group is a cluster. In this case we choose one rupture per each
     #   source; uncertainty in the ruptures can be handled in this case
@@ -239,13 +242,6 @@ def sample_cluster(sources, srcfilter, num_ses, param):
 
             proba_cnt = float(numpy.exp(cnt * numpy.log(lambda_) - lambda_ - loggamma(cnt + 1)))
 
-            print("Creating EBRupture in sample_cluster w/params:")
-            print(f"rup id: {rup.rup_id}")
-            print(f"srcidx: {srcidx}")
-            print(f"grp_id: {grp_id}")
-            print(f"cnt (rup_counter): {cnt}")
-            print(f"proba cnt: {proba_cnt}")
-            print(f"samples: {samples}")
             ebr = EBRupture(rup, srcidx, grp_id, cnt, samples,proba_occ=proba_cnt)
             eb_ruptures.append(ebr)
 
@@ -276,17 +272,23 @@ def sample_ruptures(sources, srcfilter, param, monitor=Monitor()):
     # for cluster groups or groups with mutually exclusive sources.
     if (getattr(sources, 'atomic', False) and getattr(sources, 'cluster', False)):
 
-        print(f"cluster or mutually exclusive source")
+        #print(f"cluster or mutually exclusive source")
         eb_ruptures, calc_times = sample_cluster(
             sources, srcfilter, num_ses, param)
+
+        #rup_ids = [ebrup.id for ebrup in eb_ruptures]
+        #print(f"rup_ids: {rup_ids}")
+
+        source_ids = get_source_ids(eb_ruptures,srcfilter)
 
         # Yield ruptures
         yield AccumDict(dict(rup_array=get_rup_array(eb_ruptures, srcfilter),
                              calc_times=calc_times,
-                             eff_ruptures={trt: len(eb_ruptures)}))
+                             eff_ruptures={trt: len(eb_ruptures),
+                                           },source_ids=source_ids))
     else:
 
-        print(f"no cluster nor mutually exclusive source")
+        #print(f"no cluster nor mutually exclusive source")
 
         eb_ruptures = []
         eff_ruptures = 0
@@ -298,25 +300,22 @@ def sample_ruptures(sources, srcfilter, param, monitor=Monitor()):
             t0 = time.time()
             if len(eb_ruptures) > MAX_RUPTURES:
                 # yield partial result to avoid running out of memory
+
+                #rup_ids = [ebrup.id for ebrup in eb_ruptures]
+                #print(f"rup_ids: {rup_ids}")
+
+                source_ids = get_source_ids(eb_ruptures,srcfilter)
+
                 yield AccumDict(dict(rup_array=get_rup_array(eb_ruptures,
                                                              srcfilter),
-                                     calc_times={}, eff_ruptures={}))
+                                     calc_times={}, eff_ruptures={},
+                                     source_ids=source_ids))
                 eb_ruptures.clear()
             samples = getattr(src, 'samples', 1)
 
             #for rup, grp_id, n_occ in src.sample_ruptures(samples * num_ses):
             for rup, grp_id, n_occ, proba_occ in src.sample_ruptures(samples * num_ses):
 
-                print(f"Calling src.sample_ruptures(samples * num_ses) in sample_ruptures(stochastic) w/params:")
-                print(f"samples * num_ses = {samples} * {num_ses} = {samples*num_ses}")
-                print("Creating EBRupture in sample_ruptures(stochastic) w/params:")
-                print(f"rup id: {rup.rup_id}")
-                print(f"srcidx: {src.id}")
-                print(f"grp_id: {grp_id}")
-                print(f"n_occ: {n_occ}")
-                print(f"proba_occ: {proba_occ}")
-                print(f"samples: {samples}")
-                #ebr = EBRupture(rup, src.id, grp_id, n_occ, samples)
                 ebr = EBRupture(rup, src.id, grp_id, n_occ, samples,proba_occ=proba_occ)
                 eb_ruptures.append(ebr)
             dt = time.time() - t0
@@ -326,5 +325,58 @@ def sample_ruptures(sources, srcfilter, param, monitor=Monitor()):
                 n_sites = 0
             calc_times[src.source_id] += numpy.array([nr, n_sites, dt])
         rup_array = get_rup_array(eb_ruptures, srcfilter)
+
+        #rup_ids = [ebrup.id for ebrup in eb_ruptures]
+        #print(f"rup_ids: {rup_ids}")
+
+        source_ids = get_source_ids(eb_ruptures,srcfilter)
+
         yield AccumDict(dict(rup_array=rup_array, calc_times=calc_times,
-                             eff_ruptures={trt: eff_ruptures}))
+                             eff_ruptures={trt: eff_ruptures},
+                             source_ids=source_ids))
+
+
+def get_source_ids(ebruptures,srcfilter):
+    """
+    Save source_id given by source model and srcidx found in ebruptures
+    :param ebruptures: list of EBRuptures objects
+    """
+    if not BaseRupture._code:
+        BaseRupture.init()  # initialize rupture codes
+
+    srcs = []
+
+    for ebrupture in ebruptures:
+        rup = ebrupture.rupture
+        mesh = surface_to_array(rup.surface)
+        sy, sz = mesh.shape[1:]  # sanity checks
+        assert sy < TWO16, 'Too many multisurfaces: %d' % sy
+        assert sz < TWO16, 'The rupture mesh spacing is too small'
+        hypo = rup.hypocenter.x, rup.hypocenter.y, rup.hypocenter.z
+        points = mesh.reshape(3, -1).T   # shape (n, 3)
+        rec = numpy.zeros(1, rupture_dt)[0]
+        rec['minlon'] = points[:, 0].min()
+        rec['minlat'] = points[:, 1].min()
+        rec['maxlon'] = points[:, 0].max()
+        rec['maxlat'] = points[:, 1].max()
+        rec['mag'] = rup.mag
+        rec['hypo'] = hypo
+
+        if srcfilter.integration_distance and len(
+                srcfilter.close_sids(rec, rup.tectonic_region_type)) == 0:
+            continue
+        tup = (ebrupture.source_id,ebrupture.srcidx, ebrupture.trt)
+
+        #if tup not in srcs:
+        srcs.append(tup)
+
+    if not srcs:
+        return ()
+
+    dic = {}
+
+    return hdf5.ArrayWrapper(numpy.array(srcs, source_ids_dt), dic)
+
+
+
+

@@ -175,7 +175,7 @@ class PointSource(ParametricSeismicSource):
                         mag, np.rake, self.tectonic_region_type,
                         nhc if kwargs.get('shift_hypo') else hc,
                         surface, occurrence_rate,
-                        self.temporal_occurrence_model)
+                        self.temporal_occurrence_model,source_id=self.source_id)
 
     def point_ruptures(self):
         """
@@ -187,7 +187,7 @@ class PointSource(ParametricSeismicSource):
                    longitude=self.location.longitude, depth=depth)
         for mag, mag_occ_rate in self.get_annual_occurrence_rates():
             yield PointRupture(mag, self.tectonic_region_type, hc,
-                               mag_occ_rate, self.temporal_occurrence_model)
+                               mag_occ_rate, self.temporal_occurrence_model,source_id=self.source_id)
 
     def count_nphc(self):
         """
