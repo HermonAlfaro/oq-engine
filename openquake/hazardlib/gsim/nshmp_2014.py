@@ -93,7 +93,7 @@ class NSHMP2014(base.GMPE):
     REQUIRES_RUPTURE_PARAMETERS = ()
     REQUIRES_SITES_PARAMETERS = ()
 
-    def __init__(self, **kwargs):
+    def __init__(self, kwargs):
         self.gmpe_name = kwargs['gmpe_name']
         self.sgn = kwargs['sgn']
         if self.sgn == 0:
@@ -120,6 +120,17 @@ class NSHMP2014(base.GMPE):
         # return mean increased by the adjustment factor and standard deviation
         self.adjustment = nga_west2_epistemic_adjustment(rctx.mag, dctx.rrup)
         return mean + self.sgn * self.adjustment, stddevs
+
+    def __hash__(self):
+        return hash((self.gmpe_name, self.sgn))
+
+    def __eq__(self, other):
+        return (self.gmpe_name, self.sgn) == (other.gmpe_name, other.sgn)
+
+    def __ne__(self, other):
+        # Not strictly necessary, but to avoid having both x==y and x!=y
+        # True at the same time
+        return not(self == other)
 
 
 # populate gsim_aliases

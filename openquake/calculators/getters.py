@@ -584,9 +584,6 @@ class RuptureGetter(object):
                 for eid in eids:
                     eid_rlz.append((eid + rup['e0'], rup['id'], rlz_id))
 
-        #rup_ids = [rup['id'] for rup in self.proxies]
-        #print(f"rup_ids: {rup_ids}")
-
         return numpy.array(eid_rlz, events_dt)
 
     def get_rupdict(self):

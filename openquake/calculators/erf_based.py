@@ -25,7 +25,7 @@ from openquake.baselib import hdf5
 from openquake.baselib.general import AccumDict, get_indices
 from openquake.hazardlib.probability_map import ProbabilityMap
 from openquake.hazardlib.stats import compute_pmap_stats
-from openquake.hazardlib.calc.stochastic import sample_ruptures
+from openquake.hazardlib.calc.stochastic import sample_ruptures, ruptures_from_erf
 from openquake.hazardlib.calc.filters import nofilter
 from openquake.hazardlib import InvalidFile
 from openquake.hazardlib.source import rupture
@@ -50,7 +50,7 @@ by_grp = operator.attrgetter('grp_id')
 
 # ######################## GMF calculator ############################ #
 
-def get_mean_curves(dstore):
+def get_mean_curves(dstore): # delete
     """
     Extract the mean hazard curves from the datastore, as a composite
     array of length nsites.
@@ -69,16 +69,16 @@ def compute_gmfs(rupgetter, srcfilter, param, monitor):
     return getter.compute_gmfs_curves(param.get('rlz_by_event'), monitor)
 
 
-@base.calculators.add('event_based', 'ucerf_hazard')
-class EventBasedCalculator(base.HazardCalculator):
+@base.calculators.add('erf_based')
+class ERFBasedCalculator(base.HazardCalculator):
     """
-    Event based PSHA calculator generating the ground motion fields and
-    the hazard curves from the ruptures, depending on the configuration
+    ERF based PSHA calculator generating the ground motion fields and
+    the hazard curves from the ruptures belonging to the ERF, depending on the configuration
     parameters.
     """
     core_task = compute_gmfs
     is_stochastic = True
-    accept_precalc = ['event_based', 'ebrisk', 'event_based_risk']
+    accept_precalc = ['erf_based']
 
     def init(self):
         if hasattr(self, 'csm'):
@@ -121,8 +121,6 @@ class EventBasedCalculator(base.HazardCalculator):
                     src.src_filter = srcfilter
             srcfilter = nofilter  # otherwise it would be ultra-slow
         for sg in self.csm.src_groups:
-
-            #print(f"sg: {sg}")
             if not sg.sources:
                 continue
             logging.info('Sending %s', sg)
@@ -132,7 +130,7 @@ class EventBasedCalculator(base.HazardCalculator):
                 allargs.append((src_group, srcfilter, par))
 
         # parallel sample ruptures
-        smap = parallel.Starmap(sample_ruptures, allargs, h5=self.datastore.hdf5)
+        smap = parallel.Starmap(ruptures_from_erf, allargs, h5=self.datastore.hdf5)
 
         mon = self.monitor('saving ruptures')
 
@@ -146,7 +144,6 @@ class EventBasedCalculator(base.HazardCalculator):
             if dic['eff_ruptures']:
                 eff_ruptures += dic['eff_ruptures']
             if dic['rup_array']:
-                #print(f"len(dic['rup_array']): {len(dic['rup_array'])}")
                 with mon:
                     self.rupser.save(dic['rup_array'])
 
@@ -167,25 +164,15 @@ class EventBasedCalculator(base.HazardCalculator):
         logging.info('Reordering the ruptures and storing the events')
 
         sorted_ruptures = self.datastore.getitem('ruptures')[()]
-
-        sorted_erf = self.datastore.getitem("rup")[()]
-
         # order the ruptures by rup_id
         sorted_ruptures.sort(order='serial')
-
-        sorted_erf.sort(order='serial')
-
         nr = len(sorted_ruptures)
 
-        nr_erf = len(sorted_erf)
 
+        #assert len(numpy.unique(sorted_ruptures['serial'])) == nr, (len(numpy.unique(sorted_ruptures['serial'])), nr)  # sanity
 
-        assert len(numpy.unique(sorted_ruptures['serial'])) == nr  # sanity
         self.datastore['ruptures'] = sorted_ruptures
         self.datastore['ruptures']['id'] = numpy.arange(nr)
-
-        self.datastore['rup'] = sorted_erf
-        self.datastore['rup']['id'] = numpy.arange(nr_erf)
 
         with self.monitor('saving events'):
             self.save_events(sorted_ruptures)
@@ -230,7 +217,8 @@ class EventBasedCalculator(base.HazardCalculator):
         """
         # this is very fast compared to saving the ruptures
 
-        eids = rupture.get_eids(rup_array, self.samples_by_grp, self.num_rlzs_by_grp)
+        eids = rupture.get_eids_for_erf_based(rup_array,self.num_rlzs_by_grp)
+        #eids = rupture.get_eids(rup_array, self.samples_by_grp, self.num_rlzs_by_grp)
 
         self.check_overflow()  # check the number of events
         events = numpy.zeros(len(eids), rupture.events_dt)
@@ -239,7 +227,6 @@ class EventBasedCalculator(base.HazardCalculator):
         rgetters = gen_rgetters(self.datastore)
         # build the associations eid -> rlz sequentially or in parallel
         # this is very fast: I saw 30 million events associated in 1 minute!
-
 
         logging.info('Building assocs event_id -> rlz_id for {:_d} events'
                      ' and {:_d} ruptures'.format(len(events), len(rup_array)))
@@ -265,17 +252,10 @@ class EventBasedCalculator(base.HazardCalculator):
 
         assert n_unique_events == len(events), (n_unique_events, len(events))
 
-        events['id'] = numpy.arange(len(events))
-        # set event year and event ses starting from 1
-        itime = int(self.oqparam.investigation_time)
-        nses = self.oqparam.ses_per_logic_tree_path
-        extra = numpy.zeros(len(events), [('year', U16), ('ses_id', U16)])
+        events['id'] = numpy.arange(len(events)) # one event per event -> same id of ruptures
 
-        # seed for year and ses_id
-        numpy.random.seed(self.oqparam.ses_seed)
-        extra['year'] = numpy.random.choice(itime, len(events)) + 1
-        extra['ses_id'] = numpy.random.choice(nses, len(events)) + 1
-        self.datastore['events'] = util.compose_arrays(events, extra)
+        self.datastore['events'] = events
+
         eindices = get_indices(events['rup_id'])
         arr = numpy.array(list(eindices.values()))[:, 0, :]
 
@@ -296,7 +276,7 @@ class EventBasedCalculator(base.HazardCalculator):
         num_ = dict(events=self.E, imts=len(self.oqparam.imtls))
         n = len(getattr(self, 'sitecol', ()) or ())
         num_['sites'] = n
-        if oq.calculation_mode == 'event_based' and oq.ground_motion_fields:
+        if oq.calculation_mode == 'erf_based' and oq.ground_motion_fields:
             if n > oq.max_sites_per_gmf:
                 raise ValueError(
                     'You cannot compute the GMFs for %d > %d sites' %
@@ -395,7 +375,7 @@ class EventBasedCalculator(base.HazardCalculator):
                                'all below the minimum_intensity threshold')
         return acc
 
-    def post_execute(self, result):
+    def post_execute(self, result): # change i for aggregation of gmfs by rupture
         oq = self.oqparam
         if not oq.ground_motion_fields and not oq.hazard_curves_from_gmfs:
             return

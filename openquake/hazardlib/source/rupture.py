@@ -708,9 +708,27 @@ def get_eids(rup_array, samples_by_grp, num_rlzs_by_grp):
         samples = samples_by_grp[grp_id]
         num_rlzs = num_rlzs_by_grp[grp_id]
         num_events = rup['n_occ'] if samples > 1 else rup['n_occ'] * num_rlzs
+        #num_events = rup['n_occ'] * num_rlzs
         eids = numpy.arange(num_events, dtype=U32)
         all_eids.append(eids)
     return numpy.concatenate(all_eids)
+
+def get_eids_for_erf_based(rup_array, num_rlzs_by_grp):
+    """
+    :param rup_array: a composite array with fields rup_id, n_occ and grp_id
+    :param samples_by_grp: a dictionary grp_id -> samples
+    :param num_rlzs_by_grp: a dictionary grp_id -> num_rlzs
+    """
+    all_eids = []
+    for rup in rup_array:
+        grp_id = rup['grp_id']
+        num_rlzs = num_rlzs_by_grp[grp_id]
+        num_events = rup['n_occ'] * num_rlzs
+        eids = numpy.arange(num_events, dtype=U32)
+        all_eids.append(eids)
+    return numpy.concatenate(all_eids)
+
+
 
 def filter_rup_by_n_occ(rup_array):
     """
@@ -730,8 +748,6 @@ def filter_rup_by_n_occ(rup_array):
             mask.append(False)
 
     return mask_array(rup_array,mask)
-
-
 
 
 class EBRupture(object):

@@ -678,6 +678,11 @@ class OqParam(valid.ParamSet):
         return (self.calculation_mode in
                 'event_based_risk ebrisk event_based_damage ucerf_hazard')
 
+
+    ##############################################################################################
+
+    ##############################################################################################
+
     def is_ucerf(self):
         """
         :returns: True for UCERF calculations, False otherwise

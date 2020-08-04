@@ -1120,7 +1120,7 @@ def random_filter(objects, reduction_factor, seed=42):
     list compared to the original list.
     """
     assert 0 < reduction_factor <= 1, reduction_factor
-    print(f"seed in random_filter: {seed}")
+    #print(f"seed in random_filter: {seed}")
     rnd = random.Random(seed)
     out = []
     for obj in objects:
@@ -1140,7 +1140,7 @@ def random_histogram(counts, nbins, seed):
     >>> random_histogram(10000, 5, 42)
     array([2043, 2015, 2050, 1930, 1962])
     """
-    print(f"seed in random_histogram: {seed}")
+    #print(f"seed in random_histogram: {seed}")
     numpy.random.seed(seed)
     return numpy.histogram(numpy.random.random(counts), nbins, (0, 1))[0]
 

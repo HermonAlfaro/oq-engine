@@ -125,7 +125,6 @@ def get_csm(oq, full_lt, h5=None):
     Build source models from the logic tree and to store
     them inside the `source_full_lt` dataset.
     """
-    print(f"--- get_csm ---")
     if oq.pointsource_distance is None:
         spinning_off = False
     else:

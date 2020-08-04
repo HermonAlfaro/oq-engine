@@ -271,13 +271,8 @@ def sample_ruptures(sources, srcfilter, param, monitor=Monitor()):
     # Compute the number of occurrences of the source group. This is used
     # for cluster groups or groups with mutually exclusive sources.
     if (getattr(sources, 'atomic', False) and getattr(sources, 'cluster', False)):
-
-        #print(f"cluster or mutually exclusive source")
         eb_ruptures, calc_times = sample_cluster(
             sources, srcfilter, num_ses, param)
-
-        #rup_ids = [ebrup.id for ebrup in eb_ruptures]
-        #print(f"rup_ids: {rup_ids}")
 
         source_ids = get_source_ids(eb_ruptures,srcfilter)
 
@@ -287,9 +282,6 @@ def sample_ruptures(sources, srcfilter, param, monitor=Monitor()):
                              eff_ruptures={trt: len(eb_ruptures),
                                            },source_ids=source_ids))
     else:
-
-        #print(f"no cluster nor mutually exclusive source")
-
         eb_ruptures = []
         eff_ruptures = 0
         # AccumDict of arrays with 2 elements weight, calc_time
@@ -300,9 +292,6 @@ def sample_ruptures(sources, srcfilter, param, monitor=Monitor()):
             t0 = time.time()
             if len(eb_ruptures) > MAX_RUPTURES:
                 # yield partial result to avoid running out of memory
-
-                #rup_ids = [ebrup.id for ebrup in eb_ruptures]
-                #print(f"rup_ids: {rup_ids}")
 
                 source_ids = get_source_ids(eb_ruptures,srcfilter)
 
@@ -326,14 +315,70 @@ def sample_ruptures(sources, srcfilter, param, monitor=Monitor()):
             calc_times[src.source_id] += numpy.array([nr, n_sites, dt])
         rup_array = get_rup_array(eb_ruptures, srcfilter)
 
-        #rup_ids = [ebrup.id for ebrup in eb_ruptures]
-        #print(f"rup_ids: {rup_ids}")
-
         source_ids = get_source_ids(eb_ruptures,srcfilter)
 
         yield AccumDict(dict(rup_array=rup_array, calc_times=calc_times,
                              eff_ruptures={trt: eff_ruptures},
                              source_ids=source_ids))
+
+
+def ruptures_from_erf(sources, srcfilter,param, monitor=Monitor()):
+    """
+    :param sources:
+        a sequence of sources of the same group
+    :param srcfilter:
+        SourceFilter instance used also for bounding box post filtering
+    :param param:
+        a dictionary of additional parameters including
+        ses_per_logic_tree_path
+    :param monitor:
+        monitor instance
+    :yields:
+        dictionaries with keys rup_array, calc_times
+    """
+    # AccumDict of arrays with 4 elements num_ruptures, num_sites, calc_time, sources_ids
+
+    trt = sources[0].tectonic_region_type
+
+    eb_ruptures = []
+    eff_ruptures = 0
+
+    # AccumDict of arrays with 2 elements weight, calc_time
+    calc_times = AccumDict(accum=numpy.zeros(3, numpy.float32))
+
+    for src, _sites in srcfilter(sources):
+        nr = src.num_ruptures
+        eff_ruptures += nr
+        t0 = time.time()
+        if len(eb_ruptures) > MAX_RUPTURES:
+            # yield partial result to avoid running out of memory
+
+            source_ids = get_source_ids(eb_ruptures, srcfilter)
+
+            yield AccumDict(dict(rup_array=get_rup_array(eb_ruptures,
+                                                         srcfilter),
+                                 calc_times={}, eff_ruptures={},
+                                 source_ids=source_ids))
+            eb_ruptures.clear()
+
+        eb_ruptures = []
+
+        for rup, grp_id in src.ruptures_from_erf():
+            eb_ruptures.append(EBRupture(rup,src.id,grp_id,1,1))
+
+        dt = time.time() - t0
+        try:
+            n_sites = len(_sites)
+        except (TypeError, ValueError):  # for None or a closed dataset
+            n_sites = 0
+        calc_times[src.source_id] += numpy.array([nr, n_sites, dt])
+
+    rup_array = get_rup_array(eb_ruptures, srcfilter)
+    source_ids = get_source_ids(eb_ruptures, srcfilter)
+
+    yield AccumDict(dict(rup_array=rup_array, calc_times=calc_times,
+                         eff_ruptures={trt: eff_ruptures},
+                         source_ids=source_ids))
 
 
 def get_source_ids(ebruptures,srcfilter):

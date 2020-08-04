@@ -258,6 +258,13 @@ def engine(log_file, no_distribute, yes, config_file, make_html_report,
     else:
         engine.parentparser.prog = 'oq engine'
         engine.parentparser.print_usage()
+    ##############
+    try:
+        return job_id
+    except:
+        pass
+    ###############
+
 
 
 engine._add('log_file', '--log-file', '-L', help='''\
