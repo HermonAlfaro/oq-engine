@@ -114,17 +114,13 @@ class BaseSeismicSource(metaclass=abc.ABCMeta):
         """
         rup_id = self.serial
 
-        #seed for _sample rupture
-        #print(f"seed for _sample_rupture: {self.serial}")
         numpy.random.seed(self.serial) # tu sample
 
         for grp_id in self.grp_ids:
-            #for rup, num_occ in self._sample_ruptures(eff_num_ses):
-            for rup, num_occ, proba_occ in self._sample_ruptures(eff_num_ses):
+            for rup, num_occ in self._sample_ruptures(eff_num_ses):
                 rup.rup_id = rup_id
                 rup_id += 1
-                #yield rup, grp_id, num_occ
-                yield rup, grp_id, num_occ, proba_occ
+                yield rup, grp_id, num_occ
 
 
     def ruptures_from_erf(self):
@@ -160,12 +156,9 @@ class BaseSeismicSource(metaclass=abc.ABCMeta):
                     occurs *= (aux < mutex_weight)
 
                 num_occ = occurs.sum()
-                proba_occ = rup.proba_number_of_occurrences(num_occ)
 
-                #if num_occ:
-                #    yield rup, num_occ, proba_occ
-                num_occ = 1
-                yield rup, num_occ, proba_occ
+                if num_occ:
+                    yield rup, num_occ
 
     def get_mags(self):
         """
@@ -195,13 +188,11 @@ class BaseSeismicSource(metaclass=abc.ABCMeta):
             ## sampling y proba
             lambda_ = rates * tom.time_span * eff_num_ses
             occurs = numpy.random.poisson(lambda_)
-            probas = numpy.exp(occurs * numpy.log(lambda_) - lambda_ - loggamma(occurs+1))
 
-            for rup, num_occ, proba_occ in zip(ruptures, occurs, probas):
-                #if num_occ:
-                #   yield rup, num_occ, proba_occ
-                num_occ = 1
-                yield rup, num_occ, proba_occ
+            for rup, num_occ in zip(ruptures, occurs):
+                if num_occ:
+                  yield rup, num_occ
+
             return
         # else (multi)point sources and area sources
         rup_args = []
@@ -220,32 +211,18 @@ class BaseSeismicSource(metaclass=abc.ABCMeta):
 
         # sampling and proba
         occurs = numpy.random.poisson(eff_rates)
-        probas = numpy.exp(occurs * numpy.log(eff_rates) - eff_rates - loggamma(occurs + 1))
 
-        for num_occ, args, rate, proba_occ in zip(occurs, rup_args, rates, probas):
-            # if num_occ:
-            #     mag_occ_rate, np_prob, hc_prob, mag, np, hc_depth, src = args
-            #     hc = Point(latitude=src.location.latitude,
-            #                longitude=src.location.longitude,
-            #                depth=hc_depth)
-            #     surface, _ = src._get_rupture_surface(mag, np, hc)
-            #     rup = ParametricProbabilisticRupture(
-            #         mag, np.rake, src.tectonic_region_type, hc,
-            #         surface, rate, tom,source_id=self.source_id)
-            #     yield rup, num_occ, proba_occ
-
-            mag_occ_rate, np_prob, hc_prob, mag, np, hc_depth, src = args
-            hc = Point(latitude=src.location.latitude,
-                       longitude=src.location.longitude,
-                       depth=hc_depth)
-            surface, _ = src._get_rupture_surface(mag, np, hc)
-            rup = ParametricProbabilisticRupture(
-                mag, np.rake, src.tectonic_region_type, hc,
-                surface, rate, tom,source_id=self.source_id)
-
-            num_occ = 1
-            yield rup, num_occ, proba_occ
-
+        for num_occ, args, rate in zip(occurs, rup_args, rates):
+            if num_occ:
+                mag_occ_rate, np_prob, hc_prob, mag, np, hc_depth, src = args
+                hc = Point(latitude=src.location.latitude,
+                           longitude=src.location.longitude,
+                           depth=hc_depth)
+                surface, _ = src._get_rupture_surface(mag, np, hc)
+                rup = ParametricProbabilisticRupture(
+                    mag, np.rake, src.tectonic_region_type, hc,
+                    surface, rate, tom,source_id=self.source_id)
+                yield rup, num_occ
 
 
     @abc.abstractmethod

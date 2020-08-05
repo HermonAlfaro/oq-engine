@@ -1216,7 +1216,7 @@ class RuptureData(object):
             ('mag', F32), ('lon', F32), ('lat', F32), ('depth', F32),
             ('strike', F32), ('dip', F32), ('rake', F32),
             ('boundaries', hdf5.vfloat32)] +
-            [(param, F32) for param in self.params] + [('proba_occ',F64)])
+            [(param, F32) for param in self.params])
 
     def to_array(self, proxies):
         """
@@ -1237,7 +1237,7 @@ class RuptureData(object):
             data.append(
                 (ebr.id, ebr.srcidx, ebr.n_occ, rate,
                  rup.mag, point.x, point.y, point.z, rup.surface.get_strike(),
-                 rup.surface.get_dip(), rup.rake, boundaries) + ruptparams + tuple([ebr.proba_occ]))
+                 rup.surface.get_dip(), rup.rake, boundaries) + ruptparams)
         return numpy.array(data, self.dt)
 
 
@@ -1254,10 +1254,6 @@ def extract_rupture_info(dstore, what):
     else:
         min_mag = 0
     oq = dstore['oqparam']
-    # dtlist = [('rup_id', U32),('occurrence_rate',F32), ('multiplicity', U16), ('mag', F32),
-    #           ('centroid_lon', F32), ('centroid_lat', F32),
-    #           ('centroid_depth', F32), ('trt', '<S50'),
-    #           ('strike', F32), ('dip', F32), ('rake', F32),('proba_occ',F32)]
 
     dtlist = [('rup_id', U32), ('occurrence_rate', F32), ('multiplicity', U16), ('mag', F32),
               ('centroid_lon', F32), ('centroid_lat', F32),
@@ -1277,10 +1273,7 @@ def extract_rupture_info(dstore, what):
                 boundaries.append('LINESTRING(%s)' % ', '.join(coordset))
             else:  # good polygon
                 boundaries.append('POLYGON((%s))' % ', '.join(coords))
-            # rows.append(
-            #     (r['rup_id'],r['occurrence_rate'] ,r['multiplicity'], r['mag'],
-            #      r['lon'], r['lat'], r['depth'],
-            #      rgetter.trt, r['strike'], r['dip'], r['rake'],r['proba_occ']))
+
             rows.append(
                 (r['rup_id'], r['occurrence_rate'], r['multiplicity'], r['mag'],
                  r['lon'], r['lat'], r['depth'],

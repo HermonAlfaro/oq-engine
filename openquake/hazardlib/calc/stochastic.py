@@ -102,7 +102,7 @@ rupture_dt = numpy.dtype([
     ('occurrence_rate', F32),
     ('minlon', F32), ('minlat', F32), ('maxlon', F32), ('maxlat', F32),
     ('hypo', (F32, 3)), ('gidx1', U32), ('gidx2', U32),
-    ('sx', U16), ('sy', U16), ('e0', U32), ('e1', U32),('proba_occ',F32)])
+    ('sx', U16), ('sy', U16), ('e0', U32), ('e1', U32)])
     #,('source_id', hdf5.vstr)])
 
 # this is really fast
@@ -142,7 +142,7 @@ def get_rup_array(ebruptures, srcfilter=nofilter):
         tup = (0, ebrupture.rup_id, ebrupture.srcidx, ebrupture.grp_id,
                rup.code, ebrupture.n_occ, rup.mag, rup.rake, rate,
                minlon, minlat, maxlon, maxlat, hypo,
-               offset, offset + len(points), sy, sz, 0, 0,ebrupture.proba_occ)
+               offset, offset + len(points), sy, sz, 0, 0)
                #,ebrupture.source_id)
         offset += len(points)
         rups.append(tup)
@@ -240,9 +240,7 @@ def sample_cluster(sources, srcfilter, num_ses, param):
             rup, srcidx, grp_id = rup_data[src_key][rup_key]
             cnt = rup_counter[src_key][rup_key]
 
-            proba_cnt = float(numpy.exp(cnt * numpy.log(lambda_) - lambda_ - loggamma(cnt + 1)))
-
-            ebr = EBRupture(rup, srcidx, grp_id, cnt, samples,proba_occ=proba_cnt)
+            ebr = EBRupture(rup, srcidx, grp_id, cnt, samples)
             eb_ruptures.append(ebr)
 
     return eb_ruptures, calc_times
@@ -302,10 +300,9 @@ def sample_ruptures(sources, srcfilter, param, monitor=Monitor()):
                 eb_ruptures.clear()
             samples = getattr(src, 'samples', 1)
 
-            #for rup, grp_id, n_occ in src.sample_ruptures(samples * num_ses):
-            for rup, grp_id, n_occ, proba_occ in src.sample_ruptures(samples * num_ses):
+            for rup, grp_id, n_occ in src.sample_ruptures(samples * num_ses):
 
-                ebr = EBRupture(rup, src.id, grp_id, n_occ, samples,proba_occ=proba_occ)
+                ebr = EBRupture(rup, src.id, grp_id, n_occ, samples)
                 eb_ruptures.append(ebr)
             dt = time.time() - t0
             try:

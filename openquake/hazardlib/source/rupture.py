@@ -684,17 +684,13 @@ class ExportedRupture(object):
     :param events_by_ses: dictionary ses_idx -> event records
     :param indices: site indices
     """
-    def __init__(self, rupid, n_occ, events_by_ses, indices=None, proba_occ=None,source_id=None):
+    def __init__(self, rupid, n_occ, events_by_ses, indices=None,source_id=None):
         self.rupid = rupid
         self.n_occ = n_occ
         self.events_by_ses = events_by_ses
         self.indices = indices
 
-        self.proba_occ = proba_occ # NEW : proba to have sample n_occ
-
         self.source_id = source_id
-
-        #print(f"ExportedRupture for source with id: {source_id}")
 
 def get_eids(rup_array, samples_by_grp, num_rlzs_by_grp):
     """
@@ -756,7 +752,7 @@ class EBRupture(object):
     object, containing an array of site indices affected by the rupture,
     as well as the IDs of the corresponding seismic events.
     """
-    def __init__(self, rupture, srcidx, grp_id, n_occ, samples=1, id=None, proba_occ=None):
+    def __init__(self, rupture, srcidx, grp_id, n_occ, samples=1, id=None):
         # NB: when reading an exported ruptures.xml the rup_id will be 0
         # for the first rupture; it used to be the seed instead
         assert rupture.rup_id >= 0  # sanity check
@@ -766,10 +762,6 @@ class EBRupture(object):
         self.n_occ = n_occ
         self.samples = samples
         self.id = id  # id of the rupture on the DataStore, to be overridden
-
-        self.proba_occ = proba_occ # NEW : proba to have sampled the n_occ
-
-        #print(f"EBRupture for source with id: {rupture.source_id}")
 
 
     @property
@@ -834,7 +826,7 @@ class EBRupture(object):
         attributes set, suitable for export in XML format.
         """
         rupture = self.rupture
-        new = ExportedRupture(self.id, self.n_occ, events_by_ses,proba_occ=self.proba_occ,source_id=rupture.source_id)
+        new = ExportedRupture(self.id, self.n_occ, events_by_ses,source_id=rupture.source_id)
         if isinstance(rupture.surface, geo.ComplexFaultSurface):
             new.typology = 'complexFaultsurface'
         elif isinstance(rupture.surface, geo.SimpleFaultSurface):
@@ -912,7 +904,7 @@ class RuptureProxy(object):
         # not implemented: rupture_slip_direction
         rupture = _get_rupture(self.rec, self.geom, trt)
         ebr = EBRupture(rupture, self.rec['srcidx'], self.rec['grp_id'],
-                        self.rec['n_occ'], samples,proba_occ=self.rec["proba_occ"])
+                        self.rec['n_occ'], samples)
         ebr.id = self.rec['id']
         ebr.e0 = self.rec['e0']
         return ebr
