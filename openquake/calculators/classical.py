@@ -187,11 +187,6 @@ class ClassicalCalculator(base.HazardCalculator):
 
             rup_data = dic['rup_data']
             rup_len = {k: len(v) for k, v in rup_data.items()}
-            #####################################
-            print(f"rup_data.keys(): {rup_len}") # good
-            print(f"type(rup_data['source_id'][0]): {rup_data['source_id'][0]}, {type(rup_data['source_id'][0])}")
-            print(f"self.rparams: {self.rparams}")
-            #####################################
 
             nr = len(rup_data.get('grp_id', []))
             if nr:
@@ -212,12 +207,8 @@ class ClassicalCalculator(base.HazardCalculator):
                         # store indices to the grp_ids table
                         v = U16([self.gidx[tuple(x)] for x in v])
 
-                    ####################################################
-                    #if k == 'source_id':
-                    #    v = U16([int(x.split(":")[0]+x.split(":")[1]) for x in v if x is not None])
-                    ####################################################
                     hdf5.extend(self.datastore['rup/' + k], v)
-                    print(f"k well: {k}")
+
         return acc
 
     def acc0(self):

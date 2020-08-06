@@ -168,9 +168,6 @@ class ERFBasedCalculator(base.HazardCalculator):
         sorted_ruptures.sort(order='serial')
         nr = len(sorted_ruptures)
 
-
-        #assert len(numpy.unique(sorted_ruptures['serial'])) == nr, (len(numpy.unique(sorted_ruptures['serial'])), nr)  # sanity
-
         self.datastore['ruptures'] = sorted_ruptures
         self.datastore['ruptures']['id'] = numpy.arange(nr)
 
@@ -247,10 +244,6 @@ class ERFBasedCalculator(base.HazardCalculator):
                 if i >= TWO32:
                     raise ValueError('There are more than %d events!' % i)
         events.sort(order='rup_id')  # fast too
-        # sanity check
-        n_unique_events = len(numpy.unique(events[['id', 'rup_id']]))
-
-        assert n_unique_events == len(events), (n_unique_events, len(events))
 
         events['id'] = numpy.arange(len(events)) # one event per event -> same id of ruptures
 

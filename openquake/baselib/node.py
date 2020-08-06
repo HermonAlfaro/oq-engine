@@ -481,6 +481,14 @@ class Node(object):
         node_display(self, expandattrs, expandvals, out)
         return decode(out.getvalue())
 
+    def del_duplicates_nodes(self):
+        """
+        Delete duplicates nodes in nodes attribute
+        """
+        self.nodes = list(set(self.nodes))
+
+
+
     def __iter__(self):
         """Iterate over subnodes"""
         return iter(self.nodes)
@@ -570,6 +578,9 @@ class Node(object):
 
     def __ne__(self, other):
         return not self.__eq__(other)
+
+    def __hash__(self):
+        return hash((self.tag, self.text))
 
 
 def to_literal(self):
