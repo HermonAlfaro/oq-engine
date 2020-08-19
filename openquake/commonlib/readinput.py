@@ -143,29 +143,30 @@ def normalize(key, fnames, base_path):
     input_type, _ext = key.rsplit('_', 1)
     filenames = []
     for val in fnames:
-        if '://' in val:
+        if os.path.abspath(val):
+            filenames.append(val)
+        elif '://' in val:
             # get the data from an URL
             resp = requests.get(val)
             _, val = val.rsplit('/', 1)
             with open(os.path.join(base_path, val), 'wb') as f:
                 f.write(resp.content)
-        elif os.path.isabs(val):
-            raise ValueError('%s=%s is an absolute path' % (key, val))
-        if val.endswith('.zip'):
-            zpath = os.path.normpath(os.path.join(base_path, val))
-            if key == 'exposure_file':
-                name = 'exposure.xml'
-            elif key == 'source_model_logic_tree_file':
-                name = 'ssmLT.xml'
+        if val not in filenames:
+            if val.endswith('.zip'):
+                zpath = os.path.normpath(os.path.join(base_path, val))
+                if key == 'exposure_file':
+                    name = 'exposure.xml'
+                elif key == 'source_model_logic_tree_file':
+                    name = 'ssmLT.xml'
+                else:
+                    raise KeyError('Unknown key %s' % key)
+                val = unzip_rename(zpath, name)
             else:
-                raise KeyError('Unknown key %s' % key)
-            val = unzip_rename(zpath, name)
-        else:
-            val = os.path.normpath(os.path.join(base_path, val))
-        if not os.path.exists(val):
-            # tested in archive_err_2
-            raise OSError('No such file: %s' % val)
-        filenames.append(val)
+                val = os.path.normpath(os.path.join(base_path, val))
+            if not os.path.exists(val):
+                # tested in archive_err_2
+                raise OSError('No such file: %s' % val)
+            filenames.append(val)
     return input_type, filenames
 
 
