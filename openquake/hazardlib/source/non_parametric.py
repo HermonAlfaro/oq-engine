@@ -74,7 +74,7 @@ class NonParametricSeismicSource(BaseSeismicSource):
             if rup.mag >= self.min_mag:
                 yield NonParametricProbabilisticRupture(
                     rup.mag, rup.rake, self.tectonic_region_type,
-                    rup.hypocenter, rup.surface, pmf, weight=rup.weight,source_id=self.source_id)
+                    rup.hypocenter, rup.surface, pmf, weight=rup.weight,source_id=self.source_id, source_name=self.name)
 
     def __iter__(self):
         if len(self.data) == 1:  # there is nothing to split
@@ -174,7 +174,7 @@ class NonParametricSeismicSource(BaseSeismicSource):
             hypocenter = Point(hp[0], hp[1], hp[2])
             rup = NonParametricProbabilisticRupture(
                 mag, rake, self.tectonic_region_type, hypocenter, surface, pmf,
-                weight=None if weights is None else weights[i],source_id=self.source_id)
+                weight=None if weights is None else weights[i],source_id=self.source_id, source_name=self.name)
             self.data.append((rup, pmf))
             i += 1
 

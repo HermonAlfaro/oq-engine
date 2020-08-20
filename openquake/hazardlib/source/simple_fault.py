@@ -162,7 +162,7 @@ class SimpleFaultSource(ParametricSeismicSource):
                         yield ParametricProbabilisticRupture(
                             mag, self.rake, self.tectonic_region_type,
                             hypocenter, surface, occurrence_rate_hypo,
-                            self.temporal_occurrence_model,source_id=self.source_id)
+                            self.temporal_occurrence_model,source_id=self.source_id, source_name=self.name)
                     else:
                         for hypo in self.hypo_list:
                             for slip in self.slip_list:
@@ -177,7 +177,7 @@ class SimpleFaultSource(ParametricSeismicSource):
                                     mag, self.rake, self.tectonic_region_type,
                                     hypocenter, surface, occurrence_rate_hypo,
                                     self.temporal_occurrence_model,
-                                    rupture_slip_direction,source_id=self.source_id)
+                                    rupture_slip_direction,source_id=self.source_id, source_name=self.name)
 
     def count_ruptures(self):
         """

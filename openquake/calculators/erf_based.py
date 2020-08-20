@@ -60,13 +60,13 @@ def get_mean_curves(dstore): # delete
 # ########################################################################## #
 
 
-def compute_gmfs(rupgetter, srcfilter, param, monitor):
+def compute_gmfs_erf_based(rupgetter, srcfilter, param, monitor):
     """
     Compute GMFs and optionally hazard curves
     """
     oq = param['oqparam']
     getter = GmfGetter(rupgetter, srcfilter, oq, param['amplifier'])
-    return getter.compute_gmfs_curves(param.get('rlz_by_event'), monitor)
+    return getter.compute_gmfs_curves_erf_based(param.get('rlz_by_event'), monitor)
 
 
 @base.calculators.add('erf_based')
@@ -76,7 +76,7 @@ class ERFBasedCalculator(base.HazardCalculator):
     the hazard curves from the ruptures belonging to the ERF, depending on the configuration
     parameters.
     """
-    core_task = compute_gmfs
+    core_task = compute_gmfs_erf_based
     is_stochastic = True
     accept_precalc = ['erf_based']
 
@@ -325,7 +325,7 @@ class ERFBasedCalculator(base.HazardCalculator):
 
             nrups = len(self.datastore['ruptures'])
 
-            self.datastore.create_dset('gmf_data/data', oq.gmf_data_dt())
+            self.datastore.create_dset('gmf_data/data', oq.gmf_data_dt_erf_based())
             self.datastore.create_dset('gmf_data/sigma_epsilon',
                                        sig_eps_dt(oq.imtls))
             self.datastore.create_dset(

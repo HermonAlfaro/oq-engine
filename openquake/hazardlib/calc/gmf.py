@@ -170,6 +170,47 @@ class GmfComputer(object):
         d = numpy.array(data, [('sid', U32), ('eid', U32), ('gmv', (F32, m))])
         return d, time.time() - t0
 
+    def compute_all_erf_based(self, min_iml, rlzs_by_gsim, sig_eps=None):
+        """
+        :returns: [(sid, eid, gmv), ...], dt
+        """
+        t0 = time.time()
+        rup = self.rupture
+        sids = self.sids
+        eids_by_rlz = rup.get_eids_by_rlz(rlzs_by_gsim)
+        data = []
+        for gs, rlzs in rlzs_by_gsim.items():
+            num_events = sum(len(eids_by_rlz[rlzi]) for rlzi in rlzs)
+            # NB: the trick for performance is to keep the call to
+            # compute.compute outside of the loop over the realizations
+            # it is better to have few calls producing big arrays
+            array, sig, eps = self.compute(gs, num_events)
+            array = array.transpose(1, 0, 2)  # from M, N, E to N, M, E
+            for i, miniml in enumerate(min_iml):  # gmv < minimum
+                arr = array[:, i, :]
+                arr[arr < miniml] = 0
+            n = 0
+            for rlzi in rlzs:
+                eids = eids_by_rlz[rlzi] + self.e0
+                e = len(eids)
+                for ei, eid in enumerate(eids):
+                    gmf = array[:, :, n + ei]  # shape (N, M)
+                    tot = gmf.sum(axis=0)  # shape (M,)
+                    if not tot.sum():
+                        continue
+                    if sig_eps is not None:
+                        tup = tuple([eid, rlzi] + list(sig[:, n + ei]) +
+                                    list(eps[:, n + ei]))
+                        sig_eps.append(tup)
+                    for sid, gmv in zip(sids, gmf):
+                        if gmv.sum():
+                            data.append((sid, eid, gmv, rlzi, rup.id))
+                n += e
+        m = (len(min_iml),)
+        d = numpy.array(data, [('sid', U32), ('eid', U32), ('gmv', (F32, m)),
+                               ('rlz_id', U32), ('rup_id', U32)])
+        return d, time.time() - t0
+
     def compute(self, gsim, num_events):
         """
         :param gsim: a GSIM instance

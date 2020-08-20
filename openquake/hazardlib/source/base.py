@@ -221,7 +221,9 @@ class BaseSeismicSource(metaclass=abc.ABCMeta):
                 surface, _ = src._get_rupture_surface(mag, np, hc)
                 rup = ParametricProbabilisticRupture(
                     mag, np.rake, src.tectonic_region_type, hc,
-                    surface, rate, tom,source_id=self.source_id)
+                    surface, rate, tom,
+                    source_id=self.source_id,
+                    source_name=self.name)
                 yield rup, num_occ
 
 

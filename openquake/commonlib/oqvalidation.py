@@ -602,6 +602,14 @@ class OqParam(valid.ParamSet):
         return numpy.dtype(
             [('sid', U32), ('eid', U32), ('gmv', (F32, (len(self.imtls),)))])
 
+    def gmf_data_dt_erf_based(self):
+        """
+        :returns: a composite data type for the GMFs
+        """
+        return numpy.dtype(
+            [('sid', U32), ('eid', U32), ('gmv', (F32, (len(self.imtls),))),
+             ('rlzid', U32), ('rupid', U32)])
+
     def no_imls(self):
         """
         Return True if there are no intensity measure levels

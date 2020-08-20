@@ -77,6 +77,8 @@ def _get_rupture(dic, geom=None, trt=None):
     rupture.hypocenter = geo.Point(*dic['hypo'])
     rupture.occurrence_rate = dic['occurrence_rate']
     rupture.tectonic_region_type = trt or dic['trt']
+
+
     if surface_cls is geo.PlanarSurface:
         rupture.surface = geo.PlanarSurface.from_array(
             mesh[:, 0, :])
@@ -189,7 +191,7 @@ class BaseRupture(metaclass=abc.ABCMeta):
         return code2cls
 
     def __init__(self, mag, rake, tectonic_region_type, hypocenter,
-                 surface, rupture_slip_direction=None, weight=None,source_id=None):
+                 surface, rupture_slip_direction=None, weight=None,source_id=None, source_name=None):
         if not mag > 0:
             raise ValueError('magnitude must be positive')
         NodalPlane.check_rake(rake)
@@ -202,6 +204,8 @@ class BaseRupture(metaclass=abc.ABCMeta):
         self.weight = weight
 
         self.source_id = source_id
+
+        self.source_name = source_name
 
     @property
     def code(self):
@@ -228,7 +232,8 @@ class BaseRupture(metaclass=abc.ABCMeta):
                'surface_cls': self.surface.__class__.__name__,
                'lons': mesh[0], 'lats': mesh[1], 'depths': mesh[2], #}
 
-               'source_id': self.source_id}
+               'source_id': self.source_id,
+               'source_name': self.source_name}
 
         _fixfloat32(dic)
         return dic
@@ -275,7 +280,7 @@ class NonParametricProbabilisticRupture(BaseRupture):
         in increasing order, and if they are not defined with unit step
     """
     def __init__(self, mag, rake, tectonic_region_type, hypocenter, surface,
-                 pmf, rupture_slip_direction=None, weight=None,source_id=None):
+                 pmf, rupture_slip_direction=None, weight=None,source_id=None, source_name=None):
         occ = numpy.array([occ for (prob, occ) in pmf.data])
         if not occ[0] == 0:
             raise ValueError('minimum number of ruptures must be zero')
@@ -288,14 +293,11 @@ class NonParametricProbabilisticRupture(BaseRupture):
         super().__init__(
             mag, rake, tectonic_region_type, hypocenter, surface,
             rupture_slip_direction, weight #)
-            ,source_id)
+            ,source_id, source_name)
         # an array of probabilities with sum 1
         self.probs_occur = numpy.array(
             [prob for (prob, occ) in pmf.data], numpy.float32)
         self.occurrence_rate = numpy.nan
-
-        #print(f"NonParametricProbabilisticRupture for source with id: {source_id}")
-
 
     def sample_number_of_occurrences(self, n=1):
         """
@@ -356,16 +358,15 @@ class ParametricProbabilisticRupture(BaseRupture):
     """
     def __init__(self, mag, rake, tectonic_region_type, hypocenter, surface,
                  occurrence_rate, temporal_occurrence_model,
-                 rupture_slip_direction=None,source_id=None):
+                 rupture_slip_direction=None,source_id=None, source_name=None):
         if not occurrence_rate > 0:
             raise ValueError('occurrence rate must be positive')
         super().__init__(
             mag, rake, tectonic_region_type, hypocenter, surface,
-            rupture_slip_direction,source_id=source_id)
+            rupture_slip_direction,source_id=source_id, source_name=source_name)
         self.temporal_occurrence_model = temporal_occurrence_model
         self.occurrence_rate = occurrence_rate
 
-        #print(f"ParametricProbabilisticRupture for source with id: {source_id}")
 
     def get_probability_one_or_more_occurrences(self):
         """
@@ -588,7 +589,7 @@ class PointRupture(ParametricProbabilisticRupture):
     size effects can be neglected.
     """
     def __init__(self, mag, tectonic_region_type, hypocenter,
-                 occurrence_rate, temporal_occurrence_model,source_id=None):
+                 occurrence_rate, temporal_occurrence_model,source_id=None, source_name=None):
         self.mag = mag
         self.rake = 0
         self.tectonic_region_type = tectonic_region_type
@@ -599,8 +600,7 @@ class PointRupture(ParametricProbabilisticRupture):
         self.weight = None  # no mutex
 
         self.source_id = source_id
-
-        #print(f"PointRupture for source with id: {source_id}")
+        self.source_name = source_name
 
 
 def get_geom(surface, is_from_fault_source, is_multi_surface,
@@ -684,13 +684,14 @@ class ExportedRupture(object):
     :param events_by_ses: dictionary ses_idx -> event records
     :param indices: site indices
     """
-    def __init__(self, rupid, n_occ, events_by_ses, indices=None,source_id=None):
+    def __init__(self, rupid, n_occ, events_by_ses, indices=None,source_id=None, source_name=None):
         self.rupid = rupid
         self.n_occ = n_occ
         self.events_by_ses = events_by_ses
         self.indices = indices
 
         self.source_id = source_id
+        self.source_name = source_name
 
 def get_eids(rup_array, samples_by_grp, num_rlzs_by_grp):
     """
@@ -771,7 +772,6 @@ class EBRupture(object):
         """
         return self.rupture.rup_id
 
-    #############################################
     @property
     def source_id(self):
         """
@@ -786,7 +786,12 @@ class EBRupture(object):
         """
         return self.rupture.tectonic_region_type
 
-    #############################################
+    @property
+    def source_name(self):
+        """
+        Source name of the source
+        """
+        return self.rupture.source_name
 
     def get_eids_by_rlz(self, rlzs_by_gsim):
         """

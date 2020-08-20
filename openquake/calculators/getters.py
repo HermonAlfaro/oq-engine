@@ -386,6 +386,22 @@ class GmfGetter(object):
             return []
         return numpy.concatenate(alldata)
 
+    def get_gmfdata_erf_based(self, mon):
+        """
+        :returns: an array of the dtype (sid, eid, gmv)
+        """
+        alldata = []
+        self.sig_eps = []
+        self.times = []  # rup_id, nsites, dt
+        for computer in self.gen_computers(mon):
+            data, dt = computer.compute_all_erf_based(
+                self.min_iml, self.rlzs_by_gsim, self.sig_eps)
+            self.times.append((computer.rupture.id, len(computer.sids), dt))
+            alldata.append(data)
+        if not alldata:
+            return []
+        return numpy.concatenate(alldata)
+
     def get_hazard_by_sid(self, data=None):
         """
         :param data: if given, an iterator of records of dtype gmf_dt
@@ -422,6 +438,49 @@ class GmfGetter(object):
         if not oq.ground_motion_fields:
             return dict(gmfdata=(), hcurves=hcurves)
         gmfdata = self.get_gmfdata(mon)
+        if len(gmfdata) == 0:
+            return dict(gmfdata=[])
+        indices = []
+        gmfdata.sort(order=('sid', 'eid'))
+        start = stop = 0
+        for sid, rows in itertools.groupby(gmfdata['sid']):
+            for row in rows:
+                stop += 1
+            indices.append((sid, start, stop))
+            start = stop
+        times = numpy.array([tup + (monitor.task_no,) for tup in self.times],
+                            time_dt)
+        times.sort(order='rup_id')
+        res = dict(gmfdata=gmfdata, hcurves=hcurves, times=times,
+                   sig_eps=numpy.array(self.sig_eps, self.sig_eps_dt),
+                   indices=numpy.array(indices, (U32, 3)))
+        return res
+
+    def compute_gmfs_curves_erf_based(self, rlzs, monitor):
+        """
+        :param rlzs: an array of shapeE
+        :returns: a dict with keys gmfdata, indices, hcurves
+        """
+        oq = self.oqparam
+        mon = monitor('getting ruptures', measuremem=True)
+        hcurves = {}  # key -> poes
+        if oq.hazard_curves_from_gmfs:
+            hc_mon = monitor('building hazard curves', measuremem=False)
+            gmfdata = self.get_gmfdata(mon)  # returned later
+            hazard = self.get_hazard_by_sid(data=gmfdata)
+            for sid, hazardr in hazard.items():
+                dic = group_by_rlz(hazardr, rlzs)
+                for rlzi, array in dic.items():
+                    with hc_mon:
+                        gmvs = array['gmv']
+                        for imti, imt in enumerate(oq.imtls):
+                            poes = _gmvs_to_haz_curve(
+                                gmvs[:, imti], oq.imtls[imt],
+                                oq.ses_per_logic_tree_path)
+                            hcurves[rsi2str(rlzi, sid, imt)] = poes
+        if not oq.ground_motion_fields:
+            return dict(gmfdata=(), hcurves=hcurves)
+        gmfdata = self.get_gmfdata_erf_based(mon)
         if len(gmfdata) == 0:
             return dict(gmfdata=[])
         indices = []
