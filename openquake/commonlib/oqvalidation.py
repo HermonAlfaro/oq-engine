@@ -607,8 +607,8 @@ class OqParam(valid.ParamSet):
         :returns: a composite data type for the GMFs
         """
         return numpy.dtype(
-            [('sid', U32), ('eid', U32), ('gmv', (F32, (len(self.imtls),))),
-             ('rlzid', U32), ('rupid', U32)])
+            [('sid', U32), ('gmv', (F32, (len(self.imtls),))),
+             ('rlz_id', U32), ('rup_id', U32)])
 
     def no_imls(self):
         """

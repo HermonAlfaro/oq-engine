@@ -204,10 +204,10 @@ class GmfComputer(object):
                         sig_eps.append(tup)
                     for sid, gmv in zip(sids, gmf):
                         if gmv.sum():
-                            data.append((sid, eid, gmv, rlzi, rup.id))
+                            data.append((sid, gmv, rlzi, rup.id))
                 n += e
         m = (len(min_iml),)
-        d = numpy.array(data, [('sid', U32), ('eid', U32), ('gmv', (F32, m)),
+        d = numpy.array(data, [('sid', U32), ('gmv', (F32, m)),
                                ('rlz_id', U32), ('rup_id', U32)])
         return d, time.time() - t0
 

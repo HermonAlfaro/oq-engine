@@ -484,7 +484,7 @@ class GmfGetter(object):
         if len(gmfdata) == 0:
             return dict(gmfdata=[])
         indices = []
-        gmfdata.sort(order=('sid', 'eid'))
+        gmfdata.sort(order=('rup_id', 'rlz_id', 'sid'))
         start = stop = 0
         for sid, rows in itertools.groupby(gmfdata['sid']):
             for row in rows:
